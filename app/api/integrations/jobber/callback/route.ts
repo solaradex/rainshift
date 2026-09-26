@@ -21,7 +21,6 @@ function classifyError(error: unknown) {
   if (message.includes("Jobber GraphQL request failed")) return "jobber_api";
   if (message.includes("SCHEDULING_TOKEN_ENCRYPTION_KEY")) return "encryption_config";
   if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) return "supabase_config";
-  if (message.includes("PayPal")) return "billing";
   return "connection";
 }
 
@@ -55,8 +54,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Always use the public callback URL of the deployment that received the OAuth response.
-    // This avoids stale localhost values in production environment variables.
     const redirectUri = new URL(
       "/api/integrations/jobber/callback",
       request.url
@@ -97,8 +94,11 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("RainShift Jobber callback error", error);
     const reason = classifyError(error);
+    const detail =
+      error instanceof Error ? error.message : "Unknown Jobber connection error";
     const responseUrl = new URL("/?jobber=error", request.url);
     responseUrl.searchParams.set("reason", reason);
+    responseUrl.searchParams.set("detail", detail.slice(0, 500));
     return NextResponse.redirect(responseUrl);
   }
 }
