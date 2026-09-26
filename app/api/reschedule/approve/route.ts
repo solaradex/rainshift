@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
+import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
 
 type ApprovalPayload = {
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const provider = createSupabaseSchedulingProvider(supabase, companyId);
+
     const updatedAppointments: Array<{
       id: string;
       status: string;
@@ -76,49 +79,25 @@ export async function POST(request: Request) {
           );
         }
 
-        const { data, error } = await supabase
-          .from("appointments")
-          .update({
-            proposed_date: newDate.toISOString(),
-            scheduled_date: newDate.toISOString(),
-            status: "RESCHEDULED",
-            move_reason: item.reason,
-            approved_at: new Date().toISOString(),
-          })
-          .eq("id", item.id)
-          .eq("company_id", companyId)
-          .select("id,status,scheduled_date")
-          .single();
-
-        if (error) throw error;
-
-        updatedAppointments.push({
-          id: data.id,
-          status: data.status,
-          scheduledDate: data.scheduled_date,
+        const updated = await provider.updateAppointment(item.id, {
+          proposedDate: newDate.toISOString(),
+          scheduledDate: newDate.toISOString(),
+          status: "RESCHEDULED",
+          moveReason: item.reason,
+          approvedAt: new Date().toISOString(),
         });
+
+        updatedAppointments.push(updated);
       }
 
       if (item.status === "KEEP") {
-        const { data, error } = await supabase
-          .from("appointments")
-          .update({
-            status: "KEEP",
-            move_reason: null,
-            approved_at: new Date().toISOString(),
-          })
-          .eq("id", item.id)
-          .eq("company_id", companyId)
-          .select("id,status,scheduled_date")
-          .single();
-
-        if (error) throw error;
-
-        updatedAppointments.push({
-          id: data.id,
-          status: data.status,
-          scheduledDate: data.scheduled_date,
+        const updated = await provider.updateAppointment(item.id, {
+          status: "KEEP",
+          moveReason: null,
+          approvedAt: new Date().toISOString(),
         });
+
+        updatedAppointments.push(updated);
       }
     }
 
