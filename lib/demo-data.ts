@@ -2,7 +2,7 @@ import type { DemoAppointment, WeatherEvent } from "./scheduling/types";
 
 export const demoWeather: WeatherEvent = {
   location: "Jacksonville",
-  date: "Monday, Sept 28",
+  eventDate: "2026-09-28T00:00:00.000Z",
   rainProbability: 82,
   expectedInches: 1.4,
 };
