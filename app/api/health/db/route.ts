@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 
 export async function GET() {
   try {
-    await prisma.$queryRawUnsafe("SELECT 1");
+    const { error } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", "demo-company")
+      .maybeSingle();
+
+    if (error) throw error;
 
     return NextResponse.json({
       ok: true,
       database: "connected",
+      provider: "supabase",
       checkedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -17,7 +24,7 @@ export async function GET() {
       {
         ok: false,
         database: "unavailable",
-        error: "DATABASE_URL is missing or the PostgreSQL connection failed",
+        provider: "supabase",
       },
       { status: 503 }
     );
