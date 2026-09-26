@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     const [
       { data: company, error: companyError },
       { data: authUser, error: userError },
-      { data: billing, error: billingError },
+      { data: billing, error: existingBillingError },
     ] = await Promise.all([
       supabase.from("companies").select("id,name").eq("id", companyId).maybeSingle(),
       supabase.auth.getUser(),
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
 
     if (companyError) throw companyError;
     if (userError) throw userError;
-    if (billingError) throw billingError;
+    if (existingBillingError) throw existingBillingError;
     if (!company) throw new Error("Company not found");
 
     const stripe = getStripe();
@@ -72,13 +72,13 @@ export async function POST(request: Request) {
     const customer = billing?.stripe_customer_id
       ? await stripe.customers.retrieve(billing.stripe_customer_id)
       : await stripe.customers.create({
-      email: authUser.user.email ?? undefined,
-      name: company.name,
-      metadata: {
-        rainshift_company_id: companyId,
-        rainshift_user_id: userId,
-      },
-    });
+          email: authUser.user.email ?? undefined,
+          name: company.name,
+          metadata: {
+            rainshift_company_id: companyId,
+            rainshift_user_id: userId,
+          },
+        });
 
     if (customer.deleted) {
       throw new Error("Saved Stripe customer is no longer available");
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
       cancel_url: `${appUrl}/billing?canceled=1`,
     });
 
-    const { error: billingError } = await supabase
+    const { error: updateBillingError } = await supabase
       .from("billing_accounts")
       .update({
         plan,
@@ -119,7 +119,7 @@ export async function POST(request: Request) {
       })
       .eq("company_id", companyId);
 
-    if (billingError) throw billingError;
+    if (updateBillingError) throw updateBillingError;
 
     return NextResponse.json({
       ok: true,
