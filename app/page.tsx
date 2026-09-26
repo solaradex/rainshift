@@ -26,10 +26,25 @@ export default function Home() {
   const [approved, setApproved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [onboarding, setOnboarding] = useState(true);
 
   useEffect(() => {
     async function loadProposal() {
       try {
+        const onboardingResponse = await fetch("/api/onboarding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyName: "My Landscape Company" }),
+        });
+
+        if (!onboardingResponse.ok) {
+          if (onboardingResponse.status === 401) {
+            window.location.href = "/login";
+            return;
+          }
+          throw new Error("Could not initialize company");
+        }
+
         const response = await fetch("/api/reschedule", { method: "POST" });
         if (!response.ok) throw new Error("Could not generate proposal");
         const data = (await response.json()) as ApiResponse;
@@ -37,6 +52,7 @@ export default function Home() {
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
+        setOnboarding(false);
         setLoading(false);
       }
     }
