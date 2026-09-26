@@ -43,26 +43,16 @@ model Company {
   timezone       String         @default("America/New_York")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
+  ownerUserId    String?        @map("owner_user_id") @db.Uuid
   crews          Crew[]
   customers      Customer[]
   appointments   Appointment[]
   weatherEvents  WeatherEvent[]
   billingAccount BillingAccount?
+  companyMembers CompanyMember[]
 
+  @@index([ownerUserId])
   @@map("companies")
-}
-
-model CompanyMember {
-  id        String   @id @default(uuid()) @db.Uuid
-  companyId String   @map("company_id")
-  userId    String   @map("user_id") @db.Uuid
-  role      String   @default("owner")
-  createdAt DateTime @default(now()) @map("created_at")
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, userId])
-  @@index([userId])
-  @@map("company_members")
 }
 
 model CompanyMember {
