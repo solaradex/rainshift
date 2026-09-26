@@ -57,3 +57,21 @@ The first deterministic engine uses three outcome classes:
 - **REVIEW** for weather-sensitive specialty work when conditions need an operator decision.
 
 Replacement days are assigned from Thursday through Saturday while keeping each crew's moved workload under a 7-hour planning cap.
+
+
+## Launch billing requirement
+
+RainShift will launch with a **7-day full-access free trial**.
+
+The intended signup flow is:
+
+1. Customer selects a plan.
+2. Customer enters a payment method during signup.
+3. The account starts with full product access for 7 days.
+4. The trial end date is shown clearly inside the account and onboarding flow.
+5. Unless the customer cancels before the trial ends, the subscription converts to the selected paid plan.
+6. Customers can cancel from the billing area without contacting support.
+
+This is designed to maximize conversion without hiding the billing transition. There should be no surprise charge: the signup screen and trial reminders will clearly state the trial length, selected plan, price, and when billing begins.
+
+Prisma now includes a `BillingAccount` model with trial dates, Stripe identifiers, plan, subscription status, and cancellation state.
