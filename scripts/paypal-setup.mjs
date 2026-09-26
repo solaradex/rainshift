@@ -107,7 +107,7 @@ for (const plan of plans) {
   }
 
   const existingPlans = await paypal(
-    `/v1/billing/plans?page_size=100&product_id=${encodeURIComponent(product.id)}`,
+    `/v1/billing/plans?page_size=20&product_id=${encodeURIComponent(product.id)}`,
     { method: "GET" }
   );
 
