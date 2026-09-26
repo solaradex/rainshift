@@ -6,19 +6,26 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "prisma:generate": "prisma generate"
+    "prisma:generate": "prisma generate",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:seed": "prisma db seed"
   },
   "dependencies": {
     "@prisma/client": "^7.0.0",
     "next": "16.3.4",
     "react": "19.1.0",
-    "react-dom": "19.1.0"
+    "react-dom": "19.1.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
     "@types/node": "^22.15.30",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "prisma": "^7.0.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "@types/pg": "^8.15.5"
   }
 }
