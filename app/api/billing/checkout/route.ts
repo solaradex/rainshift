@@ -3,6 +3,12 @@ import { getCurrentCompany } from "@/lib/auth/company";
 import { BILLING_PLANS, FREE_TRIAL_DAYS, type BillingPlan } from "@/lib/billing/constants";
 import { getStripe } from "@/lib/stripe";
 
+const PRICE_DEFAULTS: Record<BillingPlan, string> = {
+  starter: "price_1UJpIEEenCeoqhLjkfVn02zu",
+  growth: "price_1UJpIGEenCeoqhLjNNhgGB4z",
+  pro: "price_1UJpIIEenCeoqhLjm4LQhfMs",
+};
+
 const PRICE_ENV: Record<BillingPlan, string> = {
   starter: "STRIPE_PRICE_STARTER",
   growth: "STRIPE_PRICE_GROWTH",
@@ -32,16 +38,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const priceId = process.env[PRICE_ENV[plan]];
-    if (!priceId) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "Stripe price IDs are not configured yet",
-        },
-        { status: 503 }
-      );
-    }
+    const priceId = process.env[PRICE_ENV[plan]] ?? PRICE_DEFAULTS[plan];
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
