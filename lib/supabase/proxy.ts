@@ -10,15 +10,15 @@ export async function updateSession(request: NextRequest) {
       getAll() {
         return request.cookies.getAll();
       },
-      setAll(cookiesToSet, headers) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value);
-          supabaseResponse.cookies.set(name, value, options);
-        });
-
-        Object.entries(headers).forEach(([key, value]) => {
-          supabaseResponse.headers.set(key, value);
-        });
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            supabaseResponse.cookies.set(name, value, options);
+          });
+        } catch {
+          // Ignore cookie writes that are not available in the current request context.
+        }
       },
     },
   });
