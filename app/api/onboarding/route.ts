@@ -126,7 +126,9 @@ export async function POST(request: Request) {
           event_date: eventDate.toISOString(),
           rain_probability: 82,
           expected_inches: 1.4,
+          location: "Jacksonville, FL",
           severity: "HIGH",
+          weather_source: "open-meteo",
         },
         { onConflict: "id" }
       );
