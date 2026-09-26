@@ -14,12 +14,16 @@ enum AppointmentStatus {
   REVIEW
   RESCHEDULED
   CANCELLED
+
+  @@map("appointment_status")
 }
 
 enum WeatherSeverity {
   LOW
   MEDIUM
   HIGH
+
+  @@map("weather_severity")
 }
 
 enum BillingStatus {
@@ -29,95 +33,104 @@ enum BillingStatus {
   CANCELED
   UNPAID
   INCOMPLETE
+
+  @@map("billing_status")
 }
 
 model Company {
-  id            String         @id @default(cuid())
-  name          String
-  timezone      String         @default("America/New_York")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  crews         Crew[]
-  customers     Customer[]
-  appointments  Appointment[]
+  id             String         @id @default(cuid())
+  name           String
+  timezone       String         @default("America/New_York")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  crews          Crew[]
+  customers      Customer[]
+  appointments   Appointment[]
   weatherEvents  WeatherEvent[]
   billingAccount BillingAccount?
+
+  @@map("companies")
 }
 
 model BillingAccount {
-  id                  String        @id @default(cuid())
-  companyId           String        @unique
-  stripeCustomerId    String?       @unique
-  stripeSubscriptionId String?      @unique
-  plan                String        @default("starter")
-  status              BillingStatus @default(TRIALING)
-  trialStartedAt      DateTime?
-  trialEndsAt         DateTime?
-  currentPeriodEnd    DateTime?
-  cancelAtPeriodEnd   Boolean       @default(false)
-  canceledAt          DateTime?
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                   String        @id @default(cuid())
+  companyId            String        @unique @map("company_id")
+  stripeCustomerId     String?       @unique @map("stripe_customer_id")
+  stripeSubscriptionId  String?       @unique @map("stripe_subscription_id")
+  plan                 String        @default("starter")
+  status               BillingStatus @default(TRIALING)
+  trialStartedAt       DateTime?     @map("trial_started_at")
+  trialEndsAt          DateTime?     @map("trial_ends_at")
+  currentPeriodEnd     DateTime?     @map("current_period_end")
+  cancelAtPeriodEnd    Boolean       @default(false) @map("cancel_at_period_end")
+  canceledAt           DateTime?     @map("canceled_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+  company              Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@map("billing_accounts")
 }
 
 model Crew {
   id            String        @id @default(cuid())
-  companyId     String
+  companyId     String        @map("company_id")
   name          String
-  dailyCapacity Int           @default(480)
+  dailyCapacity Int           @default(480) @map("daily_capacity")
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   appointments  Appointment[]
 
   @@index([companyId])
+  @@map("crews")
 }
 
 model Customer {
   id            String        @id @default(cuid())
-  companyId     String
+  companyId     String        @map("company_id")
   name          String
   phone         String?
   address       String
-  preferredDays String[]
+  preferredDays String[]      @map("preferred_days")
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   appointments  Appointment[]
 
   @@index([companyId])
+  @@map("customers")
 }
 
 model Appointment {
   id              String            @id @default(cuid())
-  companyId       String
-  customerId      String
-  crewId          String
+  companyId       String            @map("company_id")
+  customerId      String            @map("customer_id")
+  crewId          String            @map("crew_id")
   service         String
-  scheduledDate   DateTime
-  durationMinutes Int
+  scheduledDate   DateTime          @map("scheduled_date")
+  durationMinutes Int               @map("duration_minutes")
   latitude        Float?
   longitude       Float?
   status          AppointmentStatus @default(SCHEDULED)
-  proposedDate    DateTime?
-  moveReason      String?
-  approvedAt      DateTime?
+  proposedDate    DateTime?         @map("proposed_date")
+  moveReason      String?           @map("move_reason")
+  approvedAt      DateTime?         @map("approved_at")
   customer        Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   crew            Crew              @relation(fields: [crewId], references: [id], onDelete: Cascade)
   company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, scheduledDate])
   @@index([crewId, scheduledDate])
+  @@map("appointments")
 }
 
 model WeatherEvent {
   id              String          @id @default(cuid())
-  companyId       String
-  eventDate       DateTime
-  rainProbability Int
-  expectedInches  Float
+  companyId       String          @map("company_id")
+  eventDate       DateTime        @map("event_date")
+  rainProbability Int             @map("rain_probability")
+  expectedInches  Float           @map("expected_inches")
   severity        WeatherSeverity
-  createdAt       DateTime        @default(now())
+  createdAt       DateTime        @default(now()) @map("created_at")
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, eventDate])
+  @@map("weather_events")
 }
