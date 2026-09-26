@@ -28,31 +28,29 @@ Prisma schema is in `prisma/schema.prisma` and currently models:
 
 ## Database setup
 
-Prisma 7 keeps the connection URL in `prisma7.config.ts`, while the application runtime reads `DATABASE_URL`.
+The current MVP uses the connected Supabase project directly through its publishable API.
 
-Copy `.env.example` to `.env` and add your PostgreSQL connection string:
+You do **not** need a local PostgreSQL server, a database password, `.env`, or `npx prisma db push` to run the current MVP.
 
-```bash
-cp .env.example .env
-```
-
-Then run:
+From the RainShift directory:
 
 ```bash
+git pull origin main
 npm install
-npm run db:setup
 npm run dev
 ```
 
-The seed creates a demo company, three crews, five customers, five appointments, one weather event, and a trial billing account.
+The live Supabase database already contains the seeded demo company, crews, customers, appointments, weather event, and trial billing account.
 
-For a deployed environment, set `DATABASE_URL` in the hosting provider's environment variables and deploy the application. Verify the connection with:
+Verify the live connection with:
 
 ```
 GET /api/health/db
 ```
 
 A successful response contains `"database": "connected"`.
+
+Prisma remains in the repository as the schema/migration layer for the next authentication and production migration milestone.
 
 ## Current demo company
 
