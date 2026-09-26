@@ -10,10 +10,13 @@ export async function GET(request: Request) {
   }
 
   const clientId = process.env.JOBBER_CLIENT_ID;
-  const redirectUri = process.env.JOBBER_REDIRECT_URI;
-  if (!clientId || !redirectUri) {
+  const redirectUri =
+    process.env.JOBBER_REDIRECT_URI ||
+    new URL("/api/integrations/jobber/callback", request.url).toString();
+
+  if (!clientId) {
     return NextResponse.json(
-      { ok: false, error: "Jobber OAuth is not configured" },
+      { ok: false, error: "Jobber OAuth is missing JOBBER_CLIENT_ID in the production environment" },
       { status: 503 }
     );
   }
