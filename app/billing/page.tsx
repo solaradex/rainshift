@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { BILLING_PLANS, type BillingPlan } from "@/lib/billing/constants";
 import { createClient } from "@/lib/supabase/client";
+import PayPalSubscriptionButton from "@/components/paypal-subscription-button";
 
 const supabase = createClient();
 
@@ -86,32 +87,16 @@ export default function BillingPage() {
     prepare();
   }, []);
 
-  async function startCheckout() {
+  async function beginPayPalCheckout() {
     setBusy(true);
     setError("");
+  }
 
-    try {
-      const response = await fetch("/api/billing/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: selected }),
-      });
-
-      const data = (await response.json()) as {
-        ok: boolean;
-        url?: string;
-        error?: string;
-      };
-
-      if (!response.ok || !data.ok || !data.url) {
-        throw new Error(data.error ?? "Could not start checkout");
-      }
-
-      window.location.href = data.url;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not start checkout");
-      setBusy(false);
-    }
+  async function handlePayPalApproved(subscriptionId: string) {
+    setBusy(true);
+    setError("");
+    window.location.href =
+      `/billing/success?provider=paypal&subscription_id=${encodeURIComponent(subscriptionId)}&plan=${selected}`;
   }
 
   async function signOut() {
@@ -239,24 +224,17 @@ export default function BillingPage() {
           <div style={{ marginTop: 8, color: "#c5d3e4", lineHeight: 1.6 }}>
             You will enter your payment method securely on the next screen. You will not be charged today. After 7 days, your selected plan will renew at its listed monthly price unless you cancel before the trial ends.
           </div>
-          <button
-            onClick={startCheckout}
-            disabled={busy}
-            style={{
-              width: "100%",
-              marginTop: 18,
-              border: 0,
-              borderRadius: 12,
-              padding: "14px 18px",
-              background: busy ? "#7c91b2" : "#3167d8",
-              color: "white",
-              fontWeight: 800,
-              fontSize: 16,
-              cursor: busy ? "default" : "pointer",
-            }}
-          >
-            {busy ? "Opening secure checkout..." : `Continue to secure checkout · ${BILLING_PLANS[selected].name}`}
-          </button>
+          <div style={{ marginTop: 18, background: "white", borderRadius: 14, padding: 14 }}>
+            <PayPalSubscriptionButton
+              plan={selected}
+              onApproved={handlePayPalApproved}
+            />
+          </div>
+          {busy && (
+            <div style={{ marginTop: 10, color: "#c5d3e4", fontSize: 13 }}>
+              Confirming your PayPal subscription...
+            </div>
+          )}
         </section>
       </section>
     </main>
