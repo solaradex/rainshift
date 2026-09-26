@@ -44,6 +44,13 @@ export default function Home() {
   useEffect(() => {
     async function loadProposal() {
       try {
+        const weatherSyncResponse = await fetch("/api/weather/sync", {
+          method: "POST",
+        });
+
+        if (!weatherSyncResponse.ok) {
+          console.warn("Live weather sync failed; using stored weather data.");
+        }
         const billingResponse = await fetch("/api/billing/status", {
           cache: "no-store",
         });
