@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ProposedAppointment, RescheduleProposal, ScheduleStatus } from "@/lib/scheduling/types";
+import { createClient } from "@/lib/supabase/client";
 
 type ApiResponse = {
   ok: boolean;
@@ -101,6 +102,11 @@ export default function Home() {
     });
   }
 
+  async function signOut() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
   async function approve() {
     if (!proposal || proposal.counts.review > 0) return;
 
@@ -149,6 +155,20 @@ export default function Home() {
             fontSize: 13,
           }}
         >
+          <button
+            onClick={signOut}
+            style={{
+              marginLeft: 10,
+              border: "1px solid rgba(255,255,255,.35)",
+              borderRadius: 10,
+              padding: "7px 10px",
+              background: "transparent",
+              color: "#13243a",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
           {approved ? "RESCHEDULE APPROVED" : "ACTION REQUIRED"}
         </div>
       </header>
