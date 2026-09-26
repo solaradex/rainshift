@@ -6,9 +6,34 @@ export default function BillingSuccessPage() {
   const [message, setMessage] = useState("Confirming your subscription...");
 
   useEffect(() => {
-    const sessionId = new URLSearchParams(window.location.search).get("session_id");
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id");
+    const provider = params.get("provider");
+    const subscriptionId = params.get("subscription_id");
+    const plan = params.get("plan");
 
     async function confirm() {
+      if (provider === "paypal" && subscriptionId && plan) {
+        try {
+          const response = await fetch("/api/paypal/confirm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ subscriptionId, plan }),
+          });
+
+          if (!response.ok) throw new Error("PayPal confirmation delayed");
+
+          setMessage("Your PayPal subscription is active. Loading RainShift...");
+        } catch {
+          setMessage("Your PayPal subscription was received. Loading RainShift...");
+        } finally {
+          window.setTimeout(() => {
+            window.location.href = "/";
+          }, 1400);
+        }
+        return;
+      }
+
       if (!sessionId) {
         setMessage("Subscription completed. Returning to RainShift...");
         window.setTimeout(() => {
