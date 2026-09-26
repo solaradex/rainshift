@@ -21,7 +21,6 @@ const JOBS_QUERY = `query GetJobs($cursor: String) {
         address {
           street
           city
-          state
           postalCode
         }
       }
@@ -70,7 +69,6 @@ type JobberJob = {
     address?: {
       street?: string | null;
       city?: string | null;
-      state?: string | null;
       postalCode?: string | null;
     } | null;
   } | null;
