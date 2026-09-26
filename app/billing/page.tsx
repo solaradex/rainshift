@@ -87,11 +87,6 @@ export default function BillingPage() {
     prepare();
   }, []);
 
-  async function beginPayPalCheckout() {
-    setBusy(true);
-    setError("");
-  }
-
   async function handlePayPalApproved(subscriptionId: string) {
     setBusy(true);
     setError("");
@@ -130,7 +125,7 @@ export default function BillingPage() {
               Choose your plan
             </h1>
             <p style={{ margin: 0, color: "#667487" }}>
-              {companyName || "Your landscape company"} · 7 days free · card required
+{companyName || "Your landscape company"} · 7 days free · payment method required
             </p>
           </div>
 
