@@ -156,31 +156,34 @@ export async function POST(request: Request) {
 
     if (appointmentError) throw appointmentError;
 
-    const trialStarted = new Date();
-    const trialEnds = new Date(trialStarted);
-    trialEnds.setDate(trialEnds.getDate() + 7);
-
-    const { error: billingError } = await supabase
+    const { data: existingBilling, error: billingLookupError } = await supabase
       .from("billing_accounts")
-      .upsert(
-        {
+      .select("id")
+      .eq("company_id", companyId)
+      .maybeSingle();
+
+    if (billingLookupError) throw billingLookupError;
+
+    if (!existingBilling) {
+      const { error: billingError } = await supabase
+        .from("billing_accounts")
+        .insert({
           id: companyId + "-billing",
           company_id: companyId,
           plan: "starter",
-          status: "TRIALING",
-          trial_started_at: trialStarted.toISOString(),
-          trial_ends_at: trialEnds.toISOString(),
-        },
-        { onConflict: "company_id" }
-      );
+          status: "INCOMPLETE",
+        });
 
-    if (billingError) throw billingError;
+      if (billingError && billingError.code !== "23505") {
+        throw billingError;
+      }
+    }
 
     return NextResponse.json({
       ok: true,
       companyId,
       created: true,
-      trialEndsAt: trialEnds.toISOString(),
+      trialEndsAt: null,
     });
   } catch (error) {
     console.error("RainShift onboarding error", error);
