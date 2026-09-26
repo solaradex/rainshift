@@ -8,7 +8,7 @@ const demoAppointments = [
 
 const mediumRisk = buildRescheduleProposal(demoAppointments, {
   location: "Jacksonville",
-  date: "Monday, Sept 28",
+  eventDate: "2026-09-28",
   rainProbability: 82,
   expectedInches: 1.4,
 });
@@ -19,7 +19,7 @@ if (mediumRisk.counts.move !== 1 || mediumRisk.counts.review !== 2) {
 
 const clearWeather = buildRescheduleProposal(demoAppointments, {
   location: "Jacksonville",
-  date: "Tuesday, Sept 29",
+  eventDate: "2026-09-29",
   rainProbability: 20,
   expectedInches: 0.1,
 });
