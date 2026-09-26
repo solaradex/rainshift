@@ -100,6 +100,7 @@ model Appointment {
   status          AppointmentStatus @default(SCHEDULED)
   proposedDate    DateTime?
   moveReason      String?
+  approvedAt      DateTime?
   customer        Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   crew            Crew              @relation(fields: [crewId], references: [id], onDelete: Cascade)
   company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
