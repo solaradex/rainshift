@@ -27,7 +27,6 @@ export default function Home() {
   const [approved, setApproved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [onboarding, setOnboarding] = useState(true);
 
   useEffect(() => {
     async function loadProposal() {
@@ -353,8 +352,8 @@ export default function Home() {
             >
               <div style={{ color: "#5f6c7b", fontSize: 14 }}>
                 {proposal.counts.review > 0
-                  ? "Resolve every REVIEW item before approval. Database writes and customer SMS come next."
-                  : "Approval is currently a simulated write. Database and customer SMS come next."}
+                  ? "Resolve every REVIEW item before approval. Approved changes are written to your live schedule."
+                  : "Approval writes the approved schedule to RainShift. Customer SMS automation is the next integration."}
               </div>
               <button
                 onClick={approve}
