@@ -48,19 +48,30 @@ export async function POST(request: Request) {
       request.headers.get("origin") ||
       "http://localhost:3000";
 
-    const [{ data: company, error: companyError }, { data: authUser, error: userError }] =
-      await Promise.all([
-        supabase.from("companies").select("id,name").eq("id", companyId).maybeSingle(),
-        supabase.auth.getUser(),
-      ]);
+    const [
+      { data: company, error: companyError },
+      { data: authUser, error: userError },
+      { data: billing, error: billingError },
+    ] = await Promise.all([
+      supabase.from("companies").select("id,name").eq("id", companyId).maybeSingle(),
+      supabase.auth.getUser(),
+      supabase
+        .from("billing_accounts")
+        .select("stripe_customer_id")
+        .eq("company_id", companyId)
+        .maybeSingle(),
+    ]);
 
     if (companyError) throw companyError;
     if (userError) throw userError;
+    if (billingError) throw billingError;
     if (!company) throw new Error("Company not found");
 
     const stripe = getStripe();
 
-    const customer = await stripe.customers.create({
+    const customer = billing?.stripe_customer_id
+      ? await stripe.customers.retrieve(billing.stripe_customer_id)
+      : await stripe.customers.create({
       email: authUser.user.email ?? undefined,
       name: company.name,
       metadata: {
@@ -68,6 +79,10 @@ export async function POST(request: Request) {
         rainshift_user_id: userId,
       },
     });
+
+    if (customer.deleted) {
+      throw new Error("Saved Stripe customer is no longer available");
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
