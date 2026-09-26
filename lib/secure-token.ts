@@ -2,12 +2,26 @@ import crypto from "node:crypto";
 
 function getKey() {
   const value = process.env.SCHEDULING_TOKEN_ENCRYPTION_KEY;
-  if (!value || !/^[0-9a-fA-F]{64}$/.test(value)) {
-    throw new Error(
-      "SCHEDULING_TOKEN_ENCRYPTION_KEY must be a 64-character hex value"
-    );
+
+  if (value && /^[0-9a-fA-F]{64}$/.test(value)) {
+    return Buffer.from(value, "hex");
   }
-  return Buffer.from(value, "hex");
+
+  // Production fallback: Jobber OAuth already requires JOBBER_CLIENT_SECRET.
+  // Derive a separate AES-256 key from it so an omitted optional encryption
+  // variable does not block the OAuth connection.
+  const jobberSecret = process.env.JOBBER_CLIENT_SECRET;
+  if (jobberSecret) {
+    return crypto
+      .createHash("sha256")
+      .update("rainshift-scheduling-token-v1:")
+      .update(jobberSecret)
+      .digest();
+  }
+
+  throw new Error(
+    "Token encryption is not configured: set SCHEDULING_TOKEN_ENCRYPTION_KEY to 64 hex characters"
+  );
 }
 
 export function encryptToken(value: string) {
