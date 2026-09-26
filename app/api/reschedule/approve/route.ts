@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/db";
+import { getCurrentCompany } from "@/lib/auth/company";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
 
 type ApprovalPayload = {
   proposal?: RescheduleProposal;
 };
 
-const DEMO_COMPANY_ID = "demo-company";
-
 export async function POST(request: Request) {
   try {
+    const { supabase, userId, companyId } = await getCurrentCompany();
+
+    if (!userId || !companyId) {
+      return NextResponse.json(
+        { ok: false, error: "No RainShift company is attached to this account" },
+        { status: 403 }
+      );
+    }
+
     const body = (await request.json()) as ApprovalPayload;
     const proposal = body.proposal;
 
@@ -20,14 +27,16 @@ export async function POST(request: Request) {
       );
     }
 
-    if (proposal.companyId && proposal.companyId !== DEMO_COMPANY_ID) {
+    if (proposal.companyId && proposal.companyId !== companyId) {
       return NextResponse.json(
         { ok: false, error: "Proposal company does not match the active company" },
         { status: 403 }
       );
     }
 
-    const reviews = proposal.appointments.filter((item) => item.status === "REVIEW");
+    const reviews = proposal.appointments.filter(
+      (item) => item.status === "REVIEW"
+    );
 
     if (reviews.length > 0) {
       return NextResponse.json(
@@ -50,7 +59,19 @@ export async function POST(request: Request) {
       if (item.status === "MOVE") {
         if (!item.newDate) {
           return NextResponse.json(
-            { ok: false, error: "Moved appointment is missing a new date: " + item.id },
+            {
+              ok: false,
+              error: "Moved appointment is missing a new date: " + item.id,
+            },
+            { status: 400 }
+          );
+        }
+
+        const newDate = new Date(item.newDate);
+
+        if (Number.isNaN(newDate.getTime())) {
+          return NextResponse.json(
+            { ok: false, error: "Invalid replacement date: " + item.id },
             { status: 400 }
           );
         }
@@ -58,14 +79,14 @@ export async function POST(request: Request) {
         const { data, error } = await supabase
           .from("appointments")
           .update({
-            proposed_date: item.newDate,
-            scheduled_date: item.newDate,
+            proposed_date: newDate.toISOString(),
+            scheduled_date: newDate.toISOString(),
             status: "RESCHEDULED",
             move_reason: item.reason,
             approved_at: new Date().toISOString(),
           })
           .eq("id", item.id)
-          .eq("company_id", DEMO_COMPANY_ID)
+          .eq("company_id", companyId)
           .select("id,status,scheduled_date")
           .single();
 
@@ -87,7 +108,7 @@ export async function POST(request: Request) {
             approved_at: new Date().toISOString(),
           })
           .eq("id", item.id)
-          .eq("company_id", DEMO_COMPANY_ID)
+          .eq("company_id", companyId)
           .select("id,status,scheduled_date")
           .single();
 
