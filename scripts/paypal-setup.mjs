@@ -64,21 +64,21 @@ async function paypal(path, options = {}) {
 const plans = [
   {
     key: "starter",
-    productId: "RAWSHIFT-STARTER",
+    productId: "RAINSHIFT-STARTER",
     name: "RainShift Starter",
     amount: "99.00",
     description: "RainShift weather rescheduling for 1–3 crews and up to 500 properties.",
   },
   {
     key: "growth",
-    productId: "RAWSHIFT-GROWTH",
+    productId: "RAINSHIFT-GROWTH",
     name: "RainShift Growth",
     amount: "199.00",
     description: "RainShift weather rescheduling for 4–10 crews and up to 2,000 properties.",
   },
   {
     key: "pro",
-    productId: "RAWSHIFT-PRO",
+    productId: "RAINSHIFT-PRO",
     name: "RainShift Pro",
     amount: "399.00",
     description: "RainShift weather rescheduling for 11–25 crews and up to 5,000 properties.",
