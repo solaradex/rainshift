@@ -2,17 +2,6 @@ import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
 import { exchangeJobberCode, getJobberAccount } from "@/lib/jobber";
 import { encryptToken } from "@/lib/secure-token";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
-import { SUPABASE_URL } from "@/lib/supabase/config";
-
-function adminClient() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
-
-  return createAdminClient(SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 function classifyError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
@@ -20,7 +9,7 @@ function classifyError(error: unknown) {
   if (message.includes("Jobber token exchange failed")) return "oauth_token_exchange";
   if (message.includes("Jobber GraphQL request failed")) return "jobber_api";
   if (message.includes("SCHEDULING_TOKEN_ENCRYPTION_KEY")) return "encryption_config";
-  if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) return "supabase_config";
+  if (message.includes("SUPABASE")) return "supabase_config";
   return "connection";
 }
 
@@ -46,7 +35,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const { userId, companyId } = await getCurrentCompany();
+    const { supabase, userId, companyId } = await getCurrentCompany();
     if (!userId || !companyId || cookieCompanyId !== companyId) {
       return NextResponse.json(
         { ok: false, error: "Jobber connection does not match the active company" },
@@ -61,7 +50,6 @@ export async function GET(request: Request) {
 
     const tokens = await exchangeJobberCode(code, redirectUri, verifier);
     const account = await getJobberAccount(tokens.access_token);
-    const supabase = adminClient();
 
     const { error: connectionError } = await supabase
       .from("scheduling_connections")
@@ -82,7 +70,11 @@ export async function GET(request: Request) {
         { onConflict: "company_id,provider" }
       );
 
-    if (connectionError) throw connectionError;
+    if (connectionError) {
+      throw new Error(
+        `Supabase connection save failed: ${connectionError.message}`
+      );
+    }
 
     const response = NextResponse.redirect(
       new URL("/?jobber=connected", request.url)
