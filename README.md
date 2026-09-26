@@ -4,33 +4,61 @@ RainShift is an AI-powered weather rescheduling layer for lawn and landscape com
 
 ## Current milestone
 
-RainShift now persists its operational data in PostgreSQL through Prisma.
+RainShift now has authenticated multi-tenant workspaces plus Stripe-powered 7-day trial onboarding.
 
 Flow:
 
-1. Weather events are stored in PostgreSQL.
-2. Appointments, customers, and crews are stored in PostgreSQL.
-3. `/api/reschedule` reads the live company records and generates a scheduling proposal.
-4. The operator can change decisions in the dashboard.
-5. `/api/reschedule/approve` validates the proposal and writes approved MOVE and KEEP decisions in a PostgreSQL transaction.
-6. Rescheduled appointments receive a real `scheduledDate`, `RESCHEDULED` status, reason, and approval timestamp.
+1. A new owner creates an account with Supabase Auth.
+2. RainShift creates a private company workspace, crews, customers, demo weather event, and appointments.
+3. The owner chooses Starter, Growth, or Pro.
+4. Stripe Checkout collects a payment method and starts a 7-day free trial.
+5. Stripe webhooks keep the RainShift billing account synchronized.
+6. After checkout, the owner reaches the live weather rescheduling dashboard.
+7. The operator can review and approve schedule changes, which are written to Supabase.
 
-## Data model
+## Billing plans
 
-Prisma schema is in `prisma/schema.prisma` and currently models:
+- Starter — $99/month — 1–3 crews, up to 500 properties
+- Growth — $199/month — 4–10 crews, up to 2,000 properties
+- Pro — $399/month — 11–25 crews, up to 5,000 properties
 
-- Companies
-- Crews
-- Customers
-- Appointments
-- Weather events
-- Billing accounts
+The signup flow is a full-access 7-day free trial. The card is collected during Stripe Checkout and the selected plan renews at its listed monthly price after the trial unless canceled.
 
-## Database setup
+## Stripe setup
+
+Create three recurring monthly Prices in Stripe Test mode:
+
+- Starter — $99/month
+- Growth — $199/month
+- Pro — $399/month
+
+Then add these values to the local .env file:
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PRICE_STARTER=price_...
+STRIPE_PRICE_GROWTH=price_...
+STRIPE_PRICE_PRO=price_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+```
+
+Do not commit .env or send secret keys through chat.
+
+For local webhook testing, Stripe recommends using the Stripe CLI to forward webhook events to the local endpoint:
+
+```bash
+stripe listen --forward-to localhost:3000/api/stripe/webhook
+```
+
+The app handles checkout completion, subscription creation/updates/deletion, and failed subscription payments.
+
+## Database
 
 The current MVP uses the connected Supabase project directly through its publishable API.
 
-You do **not** need a local PostgreSQL server, a database password, `.env`, or `npx prisma db push` to run the current MVP.
+You do **not** need a local PostgreSQL server, a database password, or `npx prisma db push` to run the current MVP.
 
 From the RainShift directory:
 
@@ -40,21 +68,7 @@ npm install
 npm run dev
 ```
 
-The live Supabase database already contains the seeded demo company, crews, customers, appointments, weather event, and trial billing account.
-
-Verify the live connection with:
-
-```
-GET /api/health/db
-```
-
-A successful response contains `"database": "connected"`.
-
-Prisma remains in the repository as the schema/migration layer for the next authentication and production migration milestone.
-
-## Current demo company
-
-The API uses `RAINSHIFT_COMPANY_ID` when present and falls back to `demo-company`. This is intentional for the pre-auth MVP. Authenticated company scoping replaces this fallback when Auth.js is added.
+Prisma remains in the repository as the schema layer for future migration work.
 
 ## Scheduling rules
 
@@ -64,20 +78,15 @@ The deterministic engine uses three outcome classes:
 - **MOVE** for routine work when rain risk is high enough to justify an automatic move.
 - **REVIEW** for weather-sensitive specialty work when conditions need an operator decision.
 
-Replacement dates are real ISO timestamps and are selected from Thursday through Saturday while keeping each crew's moved workload under a 7-hour planning cap.
-
-## Launch billing
-
-RainShift will launch with a **7-day full-access free trial**. The customer selects a plan and provides a payment method during signup. Unless they cancel before the trial ends, the selected subscription converts to paid billing.
+Replacement dates are selected from Thursday through Saturday while keeping each crew's moved workload under a 7-hour planning cap.
 
 ## Stack
 
 - Next.js
 - TypeScript
-- PostgreSQL + Prisma
-- Auth.js
+- Supabase Auth + Postgres
+- Stripe Billing + Checkout
 - OpenAI API
 - Weather API
 - Google Maps
 - Twilio
-- Stripe
