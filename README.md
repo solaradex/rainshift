@@ -46,3 +46,14 @@ npm run dev
 ```
 
 Open http://localhost:3000.
+
+
+## Scheduling rules
+
+The first deterministic engine uses three outcome classes:
+
+- **KEEP** when weather risk stays below the review threshold.
+- **MOVE** for routine work when rain risk is high enough to justify an automatic move.
+- **REVIEW** for weather-sensitive specialty work when conditions need an operator decision.
+
+Replacement days are assigned from Thursday through Saturday while keeping each crew's moved workload under a 7-hour planning cap.
