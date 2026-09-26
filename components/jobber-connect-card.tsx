@@ -7,6 +7,7 @@ export default function JobberConnectCard() {
   const [accountName, setAccountName] = useState("");
   const [checking, setChecking] = useState(true);
   const [testing, setTesting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadStatus() {
@@ -34,16 +35,11 @@ export default function JobberConnectCard() {
       const reason = params.get("reason");
       const detail = params.get("detail");
       const messages: Record<string, string> = {
-        oauth_token_exchange:
-          "Jobber authorization completed, but the OAuth token exchange failed.",
-        jobber_api:
-          "Jobber authorization succeeded, but the Jobber API rejected RainShift's request.",
-        encryption_config:
-          "Jobber authorization succeeded, but RainShift is missing its token-encryption configuration in production.",
-        supabase_config:
-          "Jobber authorization succeeded, but RainShift is missing its Supabase server configuration in production.",
-        connection:
-          "Jobber authorization returned to RainShift, but the connection could not be saved.",
+        oauth_token_exchange: "Jobber authorization completed, but the OAuth token exchange failed.",
+        jobber_api: "Jobber authorization succeeded, but the Jobber API rejected RainShift's request.",
+        encryption_config: "Jobber authorization succeeded, but RainShift is missing its token-encryption configuration in production.",
+        supabase_config: "Jobber authorization succeeded, but RainShift is missing its Supabase server configuration in production.",
+        connection: "Jobber authorization returned to RainShift, but the connection could not be saved.",
       };
 
       const base = messages[reason ?? ""] ?? "Jobber connection failed.";
@@ -67,6 +63,27 @@ export default function JobberConnectCard() {
     }
   }
 
+  async function syncJobber() {
+    setSyncing(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/integrations/jobber/sync", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error ?? "Jobber sync failed.");
+      }
+
+      setMessage(
+        `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Jobber sync failed.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   return (
     <section style={{ marginTop: 22, background: "white", border: "1px solid #dfe6ee", borderRadius: 18, padding: 22 }}>
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: "#3167d8" }}>
@@ -74,7 +91,7 @@ export default function JobberConnectCard() {
       </div>
       <h2 style={{ margin: "6px 0 6px", fontSize: 20 }}>Connect Jobber</h2>
       <p style={{ margin: 0, color: "#667487", lineHeight: 1.5 }}>
-        Connect your Jobber account so RainShift can eventually read and update real visits.
+        Connect your Jobber account so RainShift can read and update real visits.
       </p>
 
       <div style={{ marginTop: 14, fontWeight: 700 }}>
@@ -82,10 +99,12 @@ export default function JobberConnectCard() {
       </div>
 
       {message && (
-        <div style={{ marginTop: 10, fontSize: 13, color: "#526170", lineHeight: 1.5 }}>{message}</div>
+        <div style={{ marginTop: 10, fontSize: 13, color: "#526170", lineHeight: 1.5 }}>
+          {message}
+        </div>
       )}
 
-      <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+      <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap" }}>
         {!connected && (
           <a
             href="/api/integrations/jobber/connect"
@@ -103,21 +122,38 @@ export default function JobberConnectCard() {
           </a>
         )}
         {connected && (
-          <button
-            onClick={testConnection}
-            disabled={testing}
-            style={{
-              border: 0,
-              padding: "11px 16px",
-              borderRadius: 10,
-              background: "#13243a",
-              color: "white",
-              fontWeight: 800,
-              cursor: testing ? "default" : "pointer",
-            }}
-          >
-            {testing ? "Testing..." : "Test connection"}
-          </button>
+          <>
+            <button
+              onClick={testConnection}
+              disabled={testing || syncing}
+              style={{
+                border: 0,
+                padding: "11px 16px",
+                borderRadius: 10,
+                background: "#13243a",
+                color: "white",
+                fontWeight: 800,
+                cursor: testing || syncing ? "default" : "pointer",
+              }}
+            >
+              {testing ? "Testing..." : "Test connection"}
+            </button>
+            <button
+              onClick={syncJobber}
+              disabled={testing || syncing}
+              style={{
+                border: 0,
+                padding: "11px 16px",
+                borderRadius: 10,
+                background: "#1f8f5f",
+                color: "white",
+                fontWeight: 800,
+                cursor: testing || syncing ? "default" : "pointer",
+              }}
+            >
+              {syncing ? "Syncing Jobs..." : "Sync Jobber Jobs"}
+            </button>
+          </>
         )}
       </div>
     </section>
