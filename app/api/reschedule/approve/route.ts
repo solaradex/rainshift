@@ -40,37 +40,64 @@ export async function POST(request: Request) {
       );
     }
 
-    const moves = proposal.appointments.filter(
-      (item) => item.status === "MOVE" && item.newDate
-    );
-
     const result = await prisma.$transaction(async (tx) => {
-      const updated: string[] = [];
+      const updated: Array<{ id: string; status: string; scheduledDate: string }> = [];
 
-      for (const move of moves) {
+      for (const item of proposal.appointments) {
         const existing = await tx.appointment.findFirst({
           where: {
-            id: move.id,
+            id: item.id,
             companyId: DEMO_COMPANY_ID,
           },
         });
 
         if (!existing) {
-          throw new Error("Appointment not found: " + move.id);
+          throw new Error("Appointment not found: " + item.id);
         }
 
-        await tx.appointment.update({
-          where: { id: existing.id },
-          data: {
-            proposedDate: new Date(move.newDate as string),
-            scheduledDate: new Date(move.newDate as string),
-            status: "RESCHEDULED",
-            moveReason: move.reason,
-            approvedAt: new Date(),
-          },
-        });
+        if (item.status === "MOVE") {
+          if (!item.newDate) {
+            throw new Error("Moved appointment is missing a new date: " + item.id);
+          }
 
-        updated.push(existing.id);
+          const newDate = new Date(item.newDate);
+
+          if (Number.isNaN(newDate.getTime())) {
+            throw new Error("Invalid replacement date: " + item.id);
+          }
+
+          await tx.appointment.update({
+            where: { id: existing.id },
+            data: {
+              proposedDate: newDate,
+              scheduledDate: newDate,
+              status: "RESCHEDULED",
+              moveReason: item.reason,
+              approvedAt: new Date(),
+            },
+          });
+
+          updated.push({
+            id: existing.id,
+            status: "RESCHEDULED",
+            scheduledDate: newDate.toISOString(),
+          });
+        } else if (item.status === "KEEP") {
+          await tx.appointment.update({
+            where: { id: existing.id },
+            data: {
+              status: "KEEP",
+              moveReason: null,
+              approvedAt: new Date(),
+            },
+          });
+
+          updated.push({
+            id: existing.id,
+            status: "KEEP",
+            scheduledDate: existing.scheduledDate.toISOString(),
+          });
+        }
       }
 
       return { updated };
@@ -80,7 +107,7 @@ export async function POST(request: Request) {
       ok: true,
       simulated: false,
       updatedAppointments: result.updated,
-      message: "Reschedule approved and persisted to Postgres.",
+      message: "Reschedule approval persisted to Postgres.",
     });
   } catch (error) {
     console.error("RainShift approval error", error);
