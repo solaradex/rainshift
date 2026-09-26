@@ -86,7 +86,7 @@ export default function Home() {
   }
 
   async function approve() {
-    if (!proposal) return;
+    if (!proposal || proposal.counts.review > 0) return;
 
     setApproved(false);
     const response = await fetch("/api/reschedule/approve", {
@@ -194,7 +194,7 @@ export default function Home() {
                 </h2>
                 <div style={{ color: "#c5d3e4" }}>
                   {proposal.weather.rainProbability}% rain probability ·{" "}
-                  {proposal.weather.expectedInches}" expected · 47 appointments in event window
+                  {proposal.weather.expectedInches}" expected · {proposal.appointments.length} demo appointments in event window
                 </div>
               </div>
 
@@ -308,22 +308,24 @@ export default function Home() {
               }}
             >
               <div style={{ color: "#5f6c7b", fontSize: 14 }}>
-                Approval is currently a simulated write. Database and customer SMS come next.
+                {proposal.counts.review > 0
+                  ? "Resolve every REVIEW item before approval. Database writes and customer SMS come next."
+                  : "Approval is currently a simulated write. Database and customer SMS come next."}
               </div>
               <button
                 onClick={approve}
-                disabled={approved}
+                disabled={approved || counts.review > 0}
                 style={{
                   border: 0,
                   borderRadius: 12,
                   padding: "13px 20px",
                   fontWeight: 800,
-                  cursor: approved ? "default" : "pointer",
-                  background: approved ? "#9bbba8" : "#3167d8",
+                  cursor: approved || counts.review > 0 ? "default" : "pointer",
+                  background: approved ? "#9bbba8" : counts.review > 0 ? "#aeb8c5" : "#3167d8",
                   color: "white",
                 }}
               >
-                {approved ? "Approved ✓" : "Approve Reschedule"}
+                {approved ? "Approved ✓" : counts.review > 0 ? "Resolve Reviews First" : "Approve Reschedule"}
               </button>
             </div>
           </section>
