@@ -24,11 +24,22 @@ function statusColor(status: ScheduleStatus) {
   return "#8a5a00";
 }
 
+function formatEventDate(eventDate: string) {
+  const dateOnly = eventDate.slice(0, 10);
+  const date = new Date(dateOnly + "T12:00:00");
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  }).format(date);
+}
+
 export default function Home() {
   const [proposal, setProposal] = useState<RescheduleProposal | null>(null);
   const [approved, setApproved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [billingLabel, setBillingLabel] = useState("ACTIVE");
 
   useEffect(() => {
     async function loadProposal() {
@@ -48,7 +59,16 @@ export default function Home() {
         const billingStatus = (await billingResponse.json()) as {
           needsOnboarding: boolean;
           needsCheckout: boolean;
+          billing?: {
+            status?: string;
+            trial_ends_at?: string | null;
+          } | null;
         };
+
+        const isTrial =
+          billingStatus.billing?.status === "TRIALING" ||
+          Boolean(billingStatus.billing?.trial_ends_at);
+        setBillingLabel(isTrial ? "TRIAL ACTIVE" : "ACTIVE");
 
         if (billingStatus.needsOnboarding || billingStatus.needsCheckout) {
           window.location.href = "/billing";
@@ -158,8 +178,8 @@ export default function Home() {
           style={{
             padding: "10px 14px",
             borderRadius: 999,
-            background: approved ? "#e8f8ee" : "#fff4df",
-            color: approved ? "#1f7a43" : "#8b5b00",
+            background: approved ? "#e8f8ee" : "#e8f1ff",
+            color: approved ? "#1f7a43" : "#2855a5",
             fontWeight: 700,
             fontSize: 13,
           }}
@@ -178,7 +198,7 @@ export default function Home() {
           >
             Sign out
           </button>
-          {approved ? "RESCHEDULE APPROVED" : "ACTION REQUIRED"}
+          {approved ? "RESCHEDULE APPROVED" : billingLabel}
         </div>
       </header>
 
@@ -235,7 +255,7 @@ export default function Home() {
             >
               <div>
                 <h2 style={{ margin: "8px 0", fontSize: 28 }}>
-                  {proposal.weather.location} • {proposal.weather.eventDate}
+                  {proposal.weather.location} • {formatEventDate(proposal.weather.eventDate)}
                 </h2>
                 <div style={{ color: "#c5d3e4" }}>
                   {proposal.weather.rainProbability}% rain probability ·{" "}
@@ -309,7 +329,8 @@ export default function Home() {
                       <td style={{ padding: 16 }}>
                         <div>{appointment.service}</div>
                         <div style={{ fontSize: 12, color: "#788595" }}>
-                          {appointment.duration} min · {appointment.distance} mi
+                          {appointment.duration} min ·{" "}
+                          {appointment.distance > 0 ? `${appointment.distance} mi` : "Route distance pending"}
                         </div>
                       </td>
                       <td style={{ padding: 16 }}>
