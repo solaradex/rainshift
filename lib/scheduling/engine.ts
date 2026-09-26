@@ -8,19 +8,32 @@ import type {
 type CrewLoad = Record<string, number>;
 
 const replacementDays = ["Thu", "Fri", "Sat"];
+const AUTO_MOVE_RAIN_PROBABILITY = 85;
+const AUTO_MOVE_RAIN_INCHES = 1.75;
+const REVIEW_RAIN_PROBABILITY = 70;
+const REVIEW_RAIN_INCHES = 0.75;
+const CREW_MOVE_CAPACITY_MINUTES = 420;
 
 function classifyAppointment(
   appointment: DemoAppointment,
   weather: WeatherEvent
 ): { status: ProposedAppointment["status"]; reason: string } {
-  if (weather.rainProbability >= 85 || weather.expectedInches >= 1.25) {
+  const highRisk =
+    weather.rainProbability >= AUTO_MOVE_RAIN_PROBABILITY ||
+    weather.expectedInches >= AUTO_MOVE_RAIN_INCHES;
+
+  const mediumRisk =
+    weather.rainProbability >= REVIEW_RAIN_PROBABILITY ||
+    weather.expectedInches >= REVIEW_RAIN_INCHES;
+
+  if (highRisk) {
     return {
       status: "MOVE",
-      reason: "Expected rainfall exceeds the service threshold",
+      reason: "Expected rainfall exceeds the automatic move threshold",
     };
   }
 
-  if (weather.rainProbability >= 65 || weather.expectedInches >= 0.75) {
+  if (mediumRisk) {
     if (appointment.service === "Landscape Bed" || appointment.service === "Cleanup") {
       return {
         status: "REVIEW",
@@ -54,7 +67,7 @@ function chooseReplacementDay(
 
   const chosen = ordered.find((candidate) => {
     const key = appointment.crew + ":" + candidate.day;
-    return (crewLoad[key] ?? 0) + appointment.duration <= 420;
+    return (crewLoad[key] ?? 0) + appointment.duration <= CREW_MOVE_CAPACITY_MINUTES;
   });
 
   return (chosen ?? ordered[0]).day;
