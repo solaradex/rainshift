@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { ProposedAppointment, RescheduleProposal, ScheduleStatus } from "@/lib/scheduling/types";
 import { createClient } from "@/lib/supabase/client";
 
+const supabase = createClient();
+
 type ApiResponse = {
   ok: boolean;
   proposal: RescheduleProposal;
@@ -233,7 +235,7 @@ export default function Home() {
             >
               <div>
                 <h2 style={{ margin: "8px 0", fontSize: 28 }}>
-                  {proposal.weather.location} • {proposal.weather.date}
+                  {proposal.weather.location} • {proposal.weather.eventDate}
                 </h2>
                 <div style={{ color: "#c5d3e4" }}>
                   {proposal.weather.rainProbability}% rain probability ·{" "}
