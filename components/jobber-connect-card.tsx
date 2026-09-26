@@ -32,22 +32,22 @@ export default function JobberConnectCard() {
 
     if (params.get("jobber") === "error") {
       const reason = params.get("reason");
+      const detail = params.get("detail");
       const messages: Record<string, string> = {
         oauth_token_exchange:
-          "Jobber authorization completed, but the OAuth token exchange failed. Check the Jobber callback URL and Client Secret.",
+          "Jobber authorization completed, but the OAuth token exchange failed.",
         jobber_api:
-          "Jobber authorization succeeded, but RainShift could not query the Jobber API. Check the app permissions/scopes.",
+          "Jobber authorization succeeded, but the Jobber API rejected RainShift's request.",
         encryption_config:
           "Jobber authorization succeeded, but RainShift is missing its token-encryption configuration in production.",
         supabase_config:
           "Jobber authorization succeeded, but RainShift is missing its Supabase server configuration in production.",
-        billing:
-          "Jobber connected, but RainShift reported a billing configuration problem.",
         connection:
           "Jobber authorization returned to RainShift, but the connection could not be saved.",
       };
 
-      setMessage(messages[reason ?? ""] ?? "Jobber connection failed.");
+      const base = messages[reason ?? ""] ?? "Jobber connection failed.";
+      setMessage(detail ? `${base} Details: ${detail}` : base);
     }
   }, []);
 
@@ -68,15 +68,7 @@ export default function JobberConnectCard() {
   }
 
   return (
-    <section
-      style={{
-        marginTop: 22,
-        background: "white",
-        border: "1px solid #dfe6ee",
-        borderRadius: 18,
-        padding: 22,
-      }}
-    >
+    <section style={{ marginTop: 22, background: "white", border: "1px solid #dfe6ee", borderRadius: 18, padding: 22 }}>
       <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: 1.5, color: "#3167d8" }}>
         SCHEDULING INTEGRATION
       </div>
@@ -90,7 +82,7 @@ export default function JobberConnectCard() {
       </div>
 
       {message && (
-        <div style={{ marginTop: 10, fontSize: 13, color: "#526170" }}>{message}</div>
+        <div style={{ marginTop: 10, fontSize: 13, color: "#526170", lineHeight: 1.5 }}>{message}</div>
       )}
 
       <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
