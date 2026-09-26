@@ -20,9 +20,9 @@ type JobberWebhook = {
 
 const SUPPORTED_TOPICS = new Set([
   "APP_DISCONNECT",
-  "SCHEDULED_ITEM_CREATE",
-  "SCHEDULED_ITEM_UPDATE",
-  "SCHEDULED_ITEM_DELETE",
+  "JOB_CREATE",
+  "JOB_UPDATE",
+  "JOB_DESTROY",
 ]);
 
 function verifySignature(rawBody: string, signature: string) {
@@ -111,7 +111,7 @@ async function processWebhook(event: JobberWebhook) {
     return;
   }
 
-  // The scheduled-item event identifies the changed Jobber object.
+  // Job events identify the changed Jobber Job via itemId.
   // The next sync step will query Jobber using itemId and update RainShift.
   await supabase.from("integration_webhook_events").insert({
     provider: "jobber",
