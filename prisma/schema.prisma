@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  MOVE
+  KEEP
+  REVIEW
+  RESCHEDULED
+  CANCELLED
+}
+
+enum WeatherSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Company {
+  id            String         @id @default(cuid())
+  name          String
+  timezone      String         @default("America/New_York")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  crews         Crew[]
+  customers     Customer[]
+  appointments  Appointment[]
+  weatherEvents WeatherEvent[]
+}
+
+model Crew {
+  id            String        @id @default(cuid())
+  companyId     String
+  name          String
+  dailyCapacity Int           @default(480)
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  appointments  Appointment[]
+
+  @@index([companyId])
+}
+
+model Customer {
+  id            String        @id @default(cuid())
+  companyId     String
+  name          String
+  phone         String?
+  address       String
+  preferredDays String[]
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  appointments  Appointment[]
+
+  @@index([companyId])
+}
+
+model Appointment {
+  id              String            @id @default(cuid())
+  companyId       String
+  customerId      String
+  crewId          String
+  service         String
+  scheduledDate   DateTime
+  durationMinutes Int
+  latitude        Float?
+  longitude       Float?
+  status          AppointmentStatus @default(SCHEDULED)
+  proposedDate    DateTime?
+  moveReason      String?
+  customer        Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  crew            Crew              @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, scheduledDate])
+  @@index([crewId, scheduledDate])
+}
+
+model WeatherEvent {
+  id              String          @id @default(cuid())
+  companyId       String
+  eventDate       DateTime
+  rainProbability Int
+  expectedInches  Float
+  severity        WeatherSeverity
+  createdAt       DateTime        @default(now())
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, eventDate])
+}
