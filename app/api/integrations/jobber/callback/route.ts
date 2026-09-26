@@ -14,6 +14,17 @@ function adminClient() {
   });
 }
 
+function classifyError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("Jobber token exchange failed")) return "oauth_token_exchange";
+  if (message.includes("Jobber GraphQL request failed")) return "jobber_api";
+  if (message.includes("SCHEDULING_TOKEN_ENCRYPTION_KEY")) return "encryption_config";
+  if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) return "supabase_config";
+  if (message.includes("PayPal")) return "billing";
+  return "connection";
+}
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -44,40 +55,50 @@ export async function GET(request: Request) {
       );
     }
 
-    const redirectUri =
-      process.env.JOBBER_REDIRECT_URI ??
-      new URL("/api/integrations/jobber/callback", request.url).toString();
+    // Always use the public callback URL of the deployment that received the OAuth response.
+    // This avoids stale localhost values in production environment variables.
+    const redirectUri = new URL(
+      "/api/integrations/jobber/callback",
+      request.url
+    ).toString();
 
     const tokens = await exchangeJobberCode(code, redirectUri, verifier);
     const account = await getJobberAccount(tokens.access_token);
     const supabase = adminClient();
 
-    await supabase.from("scheduling_connections").upsert(
-      {
-        company_id: companyId,
-        provider: "jobber",
-        external_account_id: account.account.id,
-        external_account_name: account.account.name,
-        encrypted_access_token: encryptToken(tokens.access_token),
-        encrypted_refresh_token: encryptToken(tokens.refresh_token),
-        access_token_expires_at: new Date(
-          Date.now() + tokens.expires_in * 1000
-        ).toISOString(),
-        active: true,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "company_id,provider" }
-    );
+    const { error: connectionError } = await supabase
+      .from("scheduling_connections")
+      .upsert(
+        {
+          company_id: companyId,
+          provider: "jobber",
+          external_account_id: account.account.id,
+          external_account_name: account.account.name,
+          encrypted_access_token: encryptToken(tokens.access_token),
+          encrypted_refresh_token: encryptToken(tokens.refresh_token),
+          access_token_expires_at: new Date(
+            Date.now() + tokens.expires_in * 1000
+          ).toISOString(),
+          active: true,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "company_id,provider" }
+      );
 
-    const response = NextResponse.redirect(new URL("/?jobber=connected", request.url));
+    if (connectionError) throw connectionError;
+
+    const response = NextResponse.redirect(
+      new URL("/?jobber=connected", request.url)
+    );
     response.cookies.delete("rainshift_jobber_state");
     response.cookies.delete("rainshift_jobber_verifier");
     response.cookies.delete("rainshift_jobber_company");
     return response;
   } catch (error) {
     console.error("RainShift Jobber callback error", error);
-    return NextResponse.redirect(
-      new URL("/?jobber=error", request.url)
-    );
+    const reason = classifyError(error);
+    const responseUrl = new URL("/?jobber=error", request.url);
+    responseUrl.searchParams.set("reason", reason);
+    return NextResponse.redirect(responseUrl);
   }
 }
