@@ -64,6 +64,7 @@ export async function POST(request: Request) {
     }
 
     const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const currentPeriodEnd = subscription.items.data[0]?.current_period_end ?? null;
 
     const { error } = await supabase
       .from("billing_accounts")
@@ -81,8 +82,8 @@ export async function POST(request: Request) {
         trial_ends_at: subscription.trial_end
           ? new Date(subscription.trial_end * 1000).toISOString()
           : null,
-        current_period_end: subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toISOString()
+        current_period_end: currentPeriodEnd
+          ? new Date(currentPeriodEnd * 1000).toISOString()
           : null,
         cancel_at_period_end: subscription.cancel_at_period_end,
       })
