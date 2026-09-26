@@ -25,8 +25,30 @@ export default function JobberConnectCard() {
   useEffect(() => {
     loadStatus();
     const params = new URLSearchParams(window.location.search);
-    if (params.get("jobber") === "connected") setMessage("Jobber connected.");
-    if (params.get("jobber") === "error") setMessage("Jobber connection failed.");
+
+    if (params.get("jobber") === "connected") {
+      setMessage("Jobber connected.");
+    }
+
+    if (params.get("jobber") === "error") {
+      const reason = params.get("reason");
+      const messages: Record<string, string> = {
+        oauth_token_exchange:
+          "Jobber authorization completed, but the OAuth token exchange failed. Check the Jobber callback URL and Client Secret.",
+        jobber_api:
+          "Jobber authorization succeeded, but RainShift could not query the Jobber API. Check the app permissions/scopes.",
+        encryption_config:
+          "Jobber authorization succeeded, but RainShift is missing its token-encryption configuration in production.",
+        supabase_config:
+          "Jobber authorization succeeded, but RainShift is missing its Supabase server configuration in production.",
+        billing:
+          "Jobber connected, but RainShift reported a billing configuration problem.",
+        connection:
+          "Jobber authorization returned to RainShift, but the connection could not be saved.",
+      };
+
+      setMessage(messages[reason ?? ""] ?? "Jobber connection failed.");
+    }
   }, []);
 
   async function testConnection() {
