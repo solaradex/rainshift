@@ -32,28 +32,36 @@ export default function Home() {
   useEffect(() => {
     async function loadProposal() {
       try {
-        const onboardingResponse = await fetch("/api/onboarding", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ companyName: "My Landscape Company" }),
+        const billingResponse = await fetch("/api/billing/status", {
+          cache: "no-store",
         });
 
-        if (!onboardingResponse.ok) {
-          if (onboardingResponse.status === 401) {
+        if (!billingResponse.ok) {
+          if (billingResponse.status === 401) {
             window.location.href = "/login";
             return;
           }
-          throw new Error("Could not initialize company");
+          throw new Error("Could not load account status");
+        }
+
+        const billingStatus = (await billingResponse.json()) as {
+          needsOnboarding: boolean;
+          needsCheckout: boolean;
+        };
+
+        if (billingStatus.needsOnboarding || billingStatus.needsCheckout) {
+          window.location.href = "/billing";
+          return;
         }
 
         const response = await fetch("/api/reschedule", { method: "POST" });
         if (!response.ok) throw new Error("Could not generate proposal");
+
         const data = (await response.json()) as ApiResponse;
         setProposal(data.proposal);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
       } finally {
-        setOnboarding(false);
         setLoading(false);
       }
     }
@@ -230,7 +238,7 @@ export default function Home() {
                 </h2>
                 <div style={{ color: "#c5d3e4" }}>
                   {proposal.weather.rainProbability}% rain probability ·{" "}
-                  {proposal.weather.expectedInches}" expected · {proposal.appointments.length} demo appointments in event window
+                  {proposal.weather.expectedInches}" expected · {proposal.appointments.length} appointments in event window
                 </div>
               </div>
 
