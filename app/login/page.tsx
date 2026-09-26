@@ -46,7 +46,7 @@ export default function LoginPage() {
         if (signUpError) throw signUpError;
 
         if (data.session) {
-          window.location.href = "/";
+          window.location.href = "/billing";
           return;
         }
 
@@ -60,7 +60,7 @@ export default function LoginPage() {
 
         if (signInError) throw signInError;
 
-        window.location.href = "/";
+        window.location.href = "/billing";
       }
     } catch (err) {
       setError(
