@@ -7,7 +7,11 @@ import type {
 
 type CrewLoad = Record<string, number>;
 
-const replacementDays = ["Thu", "Fri", "Sat"];
+const replacementDays = [
+  { label: "Thu", offset: 3 },
+  { label: "Fri", offset: 4 },
+  { label: "Sat", offset: 5 },
+];
 const AUTO_MOVE_RAIN_PROBABILITY = 85;
 const AUTO_MOVE_RAIN_INCHES = 1.75;
 const REVIEW_RAIN_PROBABILITY = 70;
@@ -53,24 +57,32 @@ function classifyAppointment(
   };
 }
 
+function addDays(isoDate: string, offset: number) {
+  const source = new Date(isoDate);
+  const next = new Date(
+    Date.UTC(source.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate() + offset)
+  );
+  return next.toISOString();
+}
+
 function chooseReplacementDay(
   appointment: DemoAppointment,
   crewLoad: CrewLoad
-): string {
-  const preferred = replacementDays.indexOf(appointment.preferredDay);
+): { label: string; offset: number } {
+  const preferred = replacementDays.findIndex((day) => day.label === appointment.preferredDay);
   const ordered = replacementDays
     .map((day, index) => ({
-      day,
+      ...day,
       distance: preferred < 0 ? index : Math.abs(index - preferred),
     }))
     .sort((a, b) => a.distance - b.distance);
 
   const chosen = ordered.find((candidate) => {
-    const key = appointment.crew + ":" + candidate.day;
+    const key = appointment.crew + ":" + candidate.label;
     return (crewLoad[key] ?? 0) + appointment.duration <= CREW_MOVE_CAPACITY_MINUTES;
   });
 
-  return (chosen ?? ordered[0]).day;
+  return chosen ?? ordered[0];
 }
 
 export function buildRescheduleProposal(
@@ -89,9 +101,11 @@ export function buildRescheduleProposal(
     };
 
     if (decision.status === "MOVE") {
-      const day = chooseReplacementDay(appointment, crewLoad);
-      next.newDay = day;
-      const key = appointment.crew + ":" + day;
+      const replacement = chooseReplacementDay(appointment, crewLoad);
+      next.newDay = replacement.label;
+      next.newDate = addDays(weather.eventDate, replacement.offset);
+
+      const key = appointment.crew + ":" + replacement.label;
       crewLoad[key] = (crewLoad[key] ?? 0) + appointment.duration;
     }
 
