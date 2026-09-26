@@ -1,0 +1,94 @@
+const JOBBER_API_URL = "https://api.getjobber.com/api/graphql";
+const JOBBER_TOKEN_URL = "https://api.getjobber.com/api/oauth/token";
+const JOBBER_API_VERSION =
+  process.env.JOBBER_API_VERSION ?? "2025-04-16";
+
+export type JobberTokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+};
+
+export type JobberAccount = {
+  id: string;
+  name: string;
+};
+
+export async function exchangeJobberCode(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string
+) {
+  const clientId = process.env.JOBBER_CLIENT_ID;
+  const clientSecret = process.env.JOBBER_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Jobber OAuth credentials are not configured");
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+    code_verifier: codeVerifier,
+  });
+
+  const response = await fetch(JOBBER_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Jobber token exchange failed: ${await response.text()}`);
+  }
+
+  return (await response.json()) as JobberTokenResponse;
+}
+
+export async function jobberGraphQL<T>(
+  accessToken: string,
+  query: string,
+  variables?: Record<string, unknown>
+) {
+  const response = await fetch(JOBBER_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "X-JOBBER-GRAPHQL-VERSION": JOBBER_API_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+    cache: "no-store",
+  });
+
+  const result = (await response.json()) as {
+    data?: T;
+    errors?: Array<{ message: string }>;
+  };
+
+  if (!response.ok || result.errors?.length) {
+    throw new Error(
+      `Jobber GraphQL request failed: ${result.errors?.map((item) => item.message).join("; ") ?? response.statusText}`
+    );
+  }
+
+  if (!result.data) throw new Error("Jobber returned no data");
+  return result.data;
+}
+
+export async function getJobberAccount(accessToken: string) {
+  return jobberGraphQL<{ account: JobberAccount }>(
+    accessToken,
+    `query GetAccount {
+      account { id name }
+    }`
+  );
+}
