@@ -52,6 +52,19 @@ model Company {
   @@map("companies")
 }
 
+model CompanyMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  companyId String   @map("company_id")
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("owner")
+  createdAt DateTime @default(now()) @map("created_at")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([userId])
+  @@map("company_members")
+}
+
 model BillingAccount {
   id                   String        @id @default(cuid())
   companyId            String        @unique @map("company_id")
