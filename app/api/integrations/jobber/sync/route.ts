@@ -113,7 +113,15 @@ export async function POST() {
     let cursor: string | null = null;
 
     do {
-      const result = await jobberGraphQL<{ jobs: { nodes: JobberJob[]; pageInfo: { hasNextPage: boolean; endCursor?: string | null } } }>(
+      const result: {
+        jobs: {
+          nodes: JobberJob[];
+          pageInfo: {
+            hasNextPage: boolean;
+            endCursor?: string | null;
+          };
+        };
+      } = await jobberGraphQL(
         decryptToken(connection.encrypted_access_token),
         JOBS_QUERY,
         { cursor }
