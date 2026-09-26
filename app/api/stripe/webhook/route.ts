@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getStripe } from "@/lib/stripe";
 import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from "@/lib/supabase/config";
+import { SUPABASE_URL } from "@/lib/supabase/config";
 
 export const runtime = "nodejs";
 
@@ -59,8 +59,8 @@ async function syncSubscription(subscription: Stripe.Subscription) {
       trial_ends_at: subscription.trial_end
         ? new Date(subscription.trial_end * 1000).toISOString()
         : null,
-      current_period_end: subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
+      current_period_end: subscription.items.data[0]?.current_period_end
+        ? new Date(subscription.items.data[0].current_period_end * 1000).toISOString()
         : null,
       cancel_at_period_end: subscription.cancel_at_period_end,
       canceled_at:
@@ -114,10 +114,13 @@ export async function POST(request: Request) {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
+        const invoiceSubscription =
+          invoice.parent?.subscription_details?.subscription;
+
         const subscriptionId =
-          typeof invoice.subscription === "string"
-            ? invoice.subscription
-            : invoice.subscription?.id;
+          typeof invoiceSubscription === "string"
+            ? invoiceSubscription
+            : invoiceSubscription?.id;
 
         if (subscriptionId) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
