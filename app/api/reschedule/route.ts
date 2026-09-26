@@ -16,7 +16,7 @@ export async function POST() {
 
     const { data: weatherRecord, error: weatherError } = await supabase
       .from("weather_events")
-      .select("event_date,rain_probability,expected_inches")
+      .select("event_date,rain_probability,expected_inches,location")
       .eq("company_id", companyId)
       .order("event_date", { ascending: true })
       .limit(1)
@@ -102,7 +102,7 @@ export async function POST() {
     });
 
     const weather: WeatherEvent = {
-      location: "Jacksonville",
+      location: weatherRecord.location ?? "Jacksonville",
       eventDate: weatherRecord.event_date,
       rainProbability: weatherRecord.rain_probability,
       expectedInches: weatherRecord.expected_inches,
