@@ -13,7 +13,7 @@ export type DemoAppointment = {
 
 export type WeatherEvent = {
   location: string;
-  date: string;
+  eventDate: string;
   rainProbability: number;
   expectedInches: number;
 };
@@ -22,9 +22,11 @@ export type ProposedAppointment = DemoAppointment & {
   status: ScheduleStatus;
   reason: string;
   newDay?: string;
+  newDate?: string;
 };
 
 export type RescheduleProposal = {
+  companyId?: string;
   weather: WeatherEvent;
   appointments: ProposedAppointment[];
   counts: {
