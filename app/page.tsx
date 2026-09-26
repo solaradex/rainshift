@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ProposedAppointment, RescheduleProposal, ScheduleStatus } from "@/lib/scheduling/types";
 import { createClient } from "@/lib/supabase/client";
+import JobberConnectCard from "@/components/jobber-connect-card";
 
 const supabase = createClient();
 
@@ -237,6 +238,8 @@ export default function Home() {
           {error}
         </section>
       )}
+
+      <JobberConnectCard />
 
       {proposal && (
         <>
