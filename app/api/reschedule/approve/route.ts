@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/db";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
 
 type ApprovalPayload = {
   proposal?: RescheduleProposal;
 };
 
-const DEMO_COMPANY_ID = process.env.RAINSHIFT_COMPANY_ID ?? "demo-company";
+const DEMO_COMPANY_ID = "demo-company";
 
 export async function POST(request: Request) {
   try {
@@ -40,77 +40,76 @@ export async function POST(request: Request) {
       );
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const updated: Array<{ id: string; status: string; scheduledDate: string }> = [];
+    const updatedAppointments: Array<{
+      id: string;
+      status: string;
+      scheduledDate: string;
+    }> = [];
 
-      for (const item of proposal.appointments) {
-        const existing = await tx.appointment.findFirst({
-          where: {
-            id: item.id,
-            companyId: DEMO_COMPANY_ID,
-          },
-        });
-
-        if (!existing) {
-          throw new Error("Appointment not found: " + item.id);
+    for (const item of proposal.appointments) {
+      if (item.status === "MOVE") {
+        if (!item.newDate) {
+          return NextResponse.json(
+            { ok: false, error: "Moved appointment is missing a new date: " + item.id },
+            { status: 400 }
+          );
         }
 
-        if (item.status === "MOVE") {
-          if (!item.newDate) {
-            throw new Error("Moved appointment is missing a new date: " + item.id);
-          }
-
-          const newDate = new Date(item.newDate);
-
-          if (Number.isNaN(newDate.getTime())) {
-            throw new Error("Invalid replacement date: " + item.id);
-          }
-
-          await tx.appointment.update({
-            where: { id: existing.id },
-            data: {
-              proposedDate: newDate,
-              scheduledDate: newDate,
-              status: "RESCHEDULED",
-              moveReason: item.reason,
-              approvedAt: new Date(),
-            },
-          });
-
-          updated.push({
-            id: existing.id,
+        const { data, error } = await supabase
+          .from("appointments")
+          .update({
+            proposed_date: item.newDate,
+            scheduled_date: item.newDate,
             status: "RESCHEDULED",
-            scheduledDate: newDate.toISOString(),
-          });
-        } else if (item.status === "KEEP") {
-          await tx.appointment.update({
-            where: { id: existing.id },
-            data: {
-              status: "KEEP",
-              moveReason: null,
-              approvedAt: new Date(),
-            },
-          });
+            move_reason: item.reason,
+            approved_at: new Date().toISOString(),
+          })
+          .eq("id", item.id)
+          .eq("company_id", DEMO_COMPANY_ID)
+          .select("id,status,scheduled_date")
+          .single();
 
-          updated.push({
-            id: existing.id,
-            status: "KEEP",
-            scheduledDate: existing.scheduledDate.toISOString(),
-          });
-        }
+        if (error) throw error;
+
+        updatedAppointments.push({
+          id: data.id,
+          status: data.status,
+          scheduledDate: data.scheduled_date,
+        });
       }
 
-      return { updated };
-    });
+      if (item.status === "KEEP") {
+        const { data, error } = await supabase
+          .from("appointments")
+          .update({
+            status: "KEEP",
+            move_reason: null,
+            approved_at: new Date().toISOString(),
+          })
+          .eq("id", item.id)
+          .eq("company_id", DEMO_COMPANY_ID)
+          .select("id,status,scheduled_date")
+          .single();
+
+        if (error) throw error;
+
+        updatedAppointments.push({
+          id: data.id,
+          status: data.status,
+          scheduledDate: data.scheduled_date,
+        });
+      }
+    }
 
     return NextResponse.json({
       ok: true,
       simulated: false,
-      updatedAppointments: result.updated,
-      message: "Reschedule approval persisted to Postgres.",
+      updatedAppointments,
+      message: "Reschedule approval persisted to Supabase.",
     });
   } catch (error) {
     console.error("RainShift approval error", error);
+
     return NextResponse.json(
       { ok: false, error: "Could not persist reschedule approval" },
       { status: 500 }
