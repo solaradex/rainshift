@@ -274,8 +274,13 @@ export default function Home() {
               marginBottom: 22,
             }}
           >
-            <div style={{ fontSize: 12, letterSpacing: 1.5, fontWeight: 800, opacity: 0.7 }}>
-              WEATHER EVENT DETECTED
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ fontSize: 12, letterSpacing: 1.5, fontWeight: 800, opacity: 0.7 }}>
+                WEATHER EVENT DETECTED
+              </div>
+              <div style={{ fontSize: 11, letterSpacing: 1.2, fontWeight: 900, padding: "6px 9px", borderRadius: 999, background: "#1f8f5f" }}>
+                LIVE JOBBER SCHEDULE
+              </div>
             </div>
             <div
               style={{
