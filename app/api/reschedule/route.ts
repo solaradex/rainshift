@@ -34,9 +34,13 @@ export async function POST() {
 
     if (jobberAppointment?.scheduled_date) {
       const day = new Date(jobberAppointment.scheduled_date).toISOString().slice(0, 10);
+      const nextDay = new Date(
+        new Date(`${day}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000
+      ).toISOString();
+
       weatherQuery = weatherQuery
         .gte("event_date", `${day}T00:00:00.000Z`)
-        .lt("event_date", `${day}T00:00:00.000Z`.replace("T00:00:00.000Z", "T23:59:59.999Z"));
+        .lt("event_date", nextDay);
     }
 
     const { data: weatherRecord, error: weatherError } = await weatherQuery
