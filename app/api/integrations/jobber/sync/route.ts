@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
-import { jobberGraphQL, refreshJobberAccessToken } from "@/lib/jobber";
-import { decryptToken, encryptToken } from "@/lib/secure-token";
+import { jobberGraphQL } from "@/lib/jobber";
+import { getJobberAccessToken } from "@/lib/jobber-tokens";
+import { decryptToken } from "@/lib/secure-token";
 import { createHash } from "node:crypto";
 
 const JOBS_QUERY = `query GetJobs($cursor: String) {
@@ -133,32 +134,16 @@ export async function POST() {
           : null;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        const expired =
-          message.includes("Access token expired") ||
-          message.includes("[HTTP 401]");
+        if (!message.includes("[HTTP 401]") && !message.includes("Access token expired")) {
+          throw error;
+        }
 
-        if (!expired || !connection.encrypted_refresh_token) throw error;
-
-        const tokens = await refreshJobberAccessToken(
-          decryptToken(connection.encrypted_refresh_token)
+        accessToken = await getJobberAccessToken(
+          supabase,
+          companyId,
+          connection,
+          true
         );
-
-        const { error: saveError } = await supabase
-          .from("scheduling_connections")
-          .update({
-            encrypted_access_token: encryptToken(tokens.access_token),
-            encrypted_refresh_token: encryptToken(tokens.refresh_token),
-            access_token_expires_at: new Date(
-              Date.now() + tokens.expires_in * 1000
-            ).toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", connection.id)
-          .eq("company_id", companyId);
-
-        if (saveError) throw saveError;
-
-        accessToken = tokens.access_token;
 
         const result = await fetchJobsPage(cursor);
         jobs.push(...result.jobs.nodes);
