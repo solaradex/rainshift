@@ -13,6 +13,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
   const [checking, setChecking] = useState(true);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [smsTesting, setSmsTesting] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadStatus() {
@@ -65,6 +66,24 @@ export default function JobberConnectCard({ onProposal }: Props) {
       );
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function testSms() {
+    setSmsTesting(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/integrations/twilio/test", {
+        method: "POST",
+      });
+      const data = await response.json();
+      setMessage(
+        response.ok && data.ok
+          ? "Test SMS sent successfully."
+          : data.error ?? "Twilio SMS test failed."
+      );
+    } finally {
+      setSmsTesting(false);
     }
   }
 
@@ -151,7 +170,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
           <>
             <button
               onClick={testConnection}
-              disabled={testing || syncing}
+              disabled={testing || syncing || smsTesting}
               style={{
                 border: 0,
                 padding: "11px 16px",
@@ -166,7 +185,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
             </button>
             <button
               onClick={syncJobber}
-              disabled={testing || syncing}
+              disabled={testing || syncing || smsTesting}
               style={{
                 border: 0,
                 padding: "11px 16px",
@@ -178,6 +197,21 @@ export default function JobberConnectCard({ onProposal }: Props) {
               }}
             >
               {syncing ? "Analyzing Schedule..." : "Sync & Analyze Schedule"}
+            </button>
+            <button
+              onClick={testSms}
+              disabled={testing || syncing || smsTesting}
+              style={{
+                border: "1px solid #ccd5df",
+                padding: "11px 16px",
+                borderRadius: 10,
+                background: "white",
+                color: "#13243a",
+                fontWeight: 800,
+                cursor: testing || syncing || smsTesting ? "default" : "pointer",
+              }}
+            >
+              {smsTesting ? "Sending Test SMS..." : "Test SMS"}
             </button>
           </>
         )}
