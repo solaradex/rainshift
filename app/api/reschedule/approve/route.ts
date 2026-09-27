@@ -17,14 +17,14 @@ type SmsResult = {
 
 function buildCustomerSms(
   customerName: string,
-  service: string,
+  companyName: string,
   newDate: string,
   timezone: string
 ) {
   const firstName = customerName.trim().split(/\s+/)[0] || "Customer";
   const dateLabel = formatRescheduledDate(newDate, timezone);
 
-  return `Hi ${firstName}, RainShift weather update: your ${service} service has been moved to ${dateLabel} due to the weather forecast. No action is needed. Reply to your usual lawn-care contact with questions.`;
+  return `Hi ${firstName}, this is ${companyName}. Due to the weather forecast, your lawn service has been moved to ${dateLabel}. No action is needed. Reply to your usual lawn-care contact with questions.`;
 }
 
 export async function POST(request: Request) {
@@ -218,12 +218,9 @@ export async function POST(request: Request) {
           to: customer.phone,
           body: buildCustomerSms(
             customer.name,
-            record.service,
+            companyName,
             startAt,
             timezone
-          ).replace(
-            "your lawn-care provider",
-            companyName
           ),
         });
 
