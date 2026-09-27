@@ -138,7 +138,6 @@ export async function POST() {
       const addressParts = [
         job.property?.address?.street,
         job.property?.address?.city,
-        job.property?.address?.state,
         job.property?.address?.postalCode,
       ].filter(Boolean);
 
