@@ -75,6 +75,11 @@ export default function JobberConnectCard({ onProposal }: Props) {
       const response = await fetch("/api/integrations/jobber/sync", { method: "POST" });
       const data = await response.json();
 
+      if (data.reconnect) {
+        window.location.href = "/api/integrations/jobber/connect";
+        return;
+      }
+
       if (!response.ok || !data.ok) {
         throw new Error(data.error ?? "Jobber sync failed.");
       }
