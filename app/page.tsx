@@ -63,6 +63,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [billingLabel, setBillingLabel] = useState("ACTIVE");
+  const [approvalMessage, setApprovalMessage] = useState("");
 
   useEffect(() => {
     async function loadProposal() {
@@ -199,18 +200,26 @@ export default function Home() {
     if (!proposal || proposal.counts.review > 0) return;
 
     setApproved(false);
+    setApprovalMessage("");
     const response = await fetch("/api/reschedule/approve", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ proposal }),
     });
 
-    if (!response.ok) {
-      setError("Approval failed");
+    const data = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      message?: string;
+      error?: string;
+    };
+
+    if (!response.ok || !data.ok) {
+      setError(data.error || "Approval failed");
       return;
     }
 
     setApproved(true);
+    setApprovalMessage(data.message || "Reschedule approved.");
   }
 
   return (
@@ -440,6 +449,22 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
+
+            {approvalMessage && (
+              <div
+                style={{
+                  margin: "0 22px",
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  background: "#eef8f2",
+                  color: "#24633f",
+                  fontWeight: 700,
+                  fontSize: 14,
+                }}
+              >
+                {approvalMessage}
+              </div>
+            )}
 
             <div
               style={{
