@@ -177,6 +177,8 @@ export async function POST() {
         appointmentRows.push({
           id: stableId(companyId + "-jobber-visit", visit.id),
           company_id: companyId,
+          source_provider: "jobber",
+          external_id: visit.id,
           customer_id: customerId,
           crew_id: crewId,
           service: visit.title || job.title || `Job #${job.jobNumber}`,
