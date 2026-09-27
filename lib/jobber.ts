@@ -53,6 +53,38 @@ export async function exchangeJobberCode(
   return (await response.json()) as JobberTokenResponse;
 }
 
+export async function refreshJobberAccessToken(refreshToken: string) {
+  const clientId = process.env.JOBBER_CLIENT_ID;
+  const clientSecret = process.env.JOBBER_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Jobber OAuth credentials are not configured");
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+
+  const response = await fetch(JOBBER_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Jobber token refresh failed [${response.status}]: ${await response.text()}`);
+  }
+
+  return (await response.json()) as JobberTokenResponse;
+}
+
 export async function jobberGraphQL<T>(
   accessToken: string,
   query: string,
