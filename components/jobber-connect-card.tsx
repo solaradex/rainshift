@@ -117,7 +117,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
       </div>
       <h2 style={{ margin: "6px 0 6px", fontSize: 20 }}>Connect Jobber</h2>
       <p style={{ margin: 0, color: "#667487", lineHeight: 1.5 }}>
-        Connect your Jobber account so RainShift can read and update real visits.
+        Connect your Jobber account. RainShift will pull the schedule, check the weather, and prepare any needed changes.
       </p>
 
       <div style={{ marginTop: 14, fontWeight: 700 }}>
@@ -177,7 +177,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
                 cursor: testing || syncing ? "default" : "pointer",
               }}
             >
-              {syncing ? "Syncing Jobs..." : "Sync Jobber Jobs"}
+              {syncing ? "Analyzing Schedule..." : "Sync & Analyze Schedule"}
             </button>
           </>
         )}
