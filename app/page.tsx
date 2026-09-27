@@ -35,6 +35,28 @@ function formatEventDate(eventDate: string) {
   }).format(date);
 }
 
+function formatDateTime(value?: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function nextBusinessDate(eventDate: string) {
+  const date = new Date(eventDate.slice(0, 10) + "T12:00:00Z");
+  for (let i = 0; i < 7; i += 1) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    if (date.getUTCDay() !== 0) return date.toISOString();
+  }
+  return date.toISOString();
+}
+
 export default function Home() {
   const [proposal, setProposal] = useState<RescheduleProposal | null>(null);
   const [approved, setApproved] = useState(false);
@@ -136,8 +158,21 @@ export default function Home() {
         const status = next[appointment.status];
         const updated: ProposedAppointment = { ...appointment, status };
 
-        if (status === "MOVE" && !updated.newDay) {
-          updated.newDay = "Thu";
+        if (status === "MOVE") {
+          const replacement = nextBusinessDate(current.weather.eventDate);
+          updated.newDate = replacement;
+          updated.newDay = new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: "UTC",
+          }).format(new Date(replacement));
+          updated.reason =
+            updated.reason ||
+            "Manual operator override: move to the next business day";
+        }
+
+        if (status !== "MOVE") {
+          updated.newDate = undefined;
+          updated.newDay = undefined;
         }
 
         return updated;
@@ -296,7 +331,14 @@ export default function Home() {
                 </h2>
                 <div style={{ color: "#c5d3e4" }}>
                   {proposal.weather.rainProbability}% rain probability ·{" "}
-                  {proposal.weather.expectedInches}" expected · {proposal.appointments.length} appointments in event window
+                  {proposal.weather.expectedInches}" expected · {proposal.appointments.length} Jobber appointment{proposal.appointments.length === 1 ? "" : "s"}
+                </div>
+                <div style={{ marginTop: 10, fontWeight: 800 }}>
+                  {counts.move > 0
+                    ? `${counts.move} appointment${counts.move === 1 ? "" : "s"} scheduled to move`
+                    : counts.review > 0
+                      ? `${counts.review} appointment${counts.review === 1 ? "" : "s"} need review`
+                      : "No schedule changes recommended"}
                 </div>
               </div>
 
@@ -340,7 +382,7 @@ export default function Home() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", textAlign: "left" }}>
-                    {["Customer", "Crew", "Service", "RainShift", "Reason", "New Day"].map(
+                    {["Customer", "Crew", "Service", "Decision", "Why", "Move to"].map(
                       (label) => (
                         <th
                           key={label}
@@ -391,7 +433,7 @@ export default function Home() {
                         {appointment.reason}
                       </td>
                       <td style={{ padding: 16, fontWeight: 700 }}>
-                        {appointment.newDay ?? "—"}
+                        {appointment.status === "MOVE" ? formatDateTime(appointment.newDate) : "—"}
                       </td>
                     </tr>
                   ))}
@@ -412,12 +454,14 @@ export default function Home() {
             >
               <div style={{ color: "#5f6c7b", fontSize: 14 }}>
                 {proposal.counts.review > 0
-                  ? "Resolve every REVIEW item before approval. Approved changes are written to your live schedule."
-                  : "Approval writes the approved schedule to RainShift. Customer SMS automation is the next integration."}
+                  ? "Click a decision to cycle KEEP → MOVE → REVIEW. MOVE shows the exact replacement date before approval."
+                  : proposal.counts.move > 0
+                    ? "Approve to write MOVE decisions back to Jobber. KEEP decisions stay where they are."
+                    : "No changes are recommended for this weather window."}
               </div>
               <button
                 onClick={approve}
-                disabled={approved || counts.review > 0}
+                disabled={approved || counts.review > 0 || counts.move === 0}
                 style={{
                   border: 0,
                   borderRadius: 12,
@@ -428,7 +472,13 @@ export default function Home() {
                   color: "white",
                 }}
               >
-                {approved ? "Approved ✓" : counts.review > 0 ? "Resolve Reviews First" : "Approve Reschedule"}
+                {approved
+                  ? "Approved ✓"
+                  : counts.review > 0
+                    ? "Resolve Reviews First"
+                    : counts.move > 0
+                      ? `Approve ${counts.move} Jobber change${counts.move === 1 ? "" : "s"}`
+                      : "No Changes to Approve"}
               </button>
             </div>
           </section>
