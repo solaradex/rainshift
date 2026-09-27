@@ -7,11 +7,6 @@ import type {
 
 type CrewLoad = Record<string, number>;
 
-const replacementDays = [
-  { label: "Thu", offset: 3 },
-  { label: "Fri", offset: 4 },
-  { label: "Sat", offset: 5 },
-];
 const AUTO_MOVE_RAIN_PROBABILITY = 85;
 const AUTO_MOVE_RAIN_INCHES = 1.75;
 const REVIEW_RAIN_PROBABILITY = 70;
@@ -60,26 +55,63 @@ function classifyAppointment(
 function addDays(isoDate: string, offset: number) {
   const source = new Date(isoDate);
   const next = new Date(
-    Date.UTC(source.getUTCFullYear(), source.getUTCMonth(), source.getUTCDate() + offset)
+    Date.UTC(
+      source.getUTCFullYear(),
+      source.getUTCMonth(),
+      source.getUTCDate() + offset
+    )
   );
   return next.toISOString();
 }
 
+function getWeekday(isoDate: string) {
+  return new Date(isoDate).toLocaleDateString("en-US", {
+    weekday: "short",
+    timeZone: "UTC",
+  });
+}
+
+function getReplacementDays(eventDate: string) {
+  const days: Array<{ label: string; offset: number }> = [];
+
+  for (let offset = 1; days.length < 3; offset += 1) {
+    const date = addDays(eventDate, offset);
+    const label = getWeekday(date);
+
+    if (label === "Sun") continue;
+
+    days.push({ label, offset });
+  }
+
+  return days;
+}
+
 function chooseReplacementDay(
   appointment: DemoAppointment,
-  crewLoad: CrewLoad
+  crewLoad: CrewLoad,
+  eventDate: string
 ): { label: string; offset: number } {
-  const preferred = replacementDays.findIndex((day) => day.label === appointment.preferredDay);
+  const replacementDays = getReplacementDays(eventDate);
+  const preferredIndex = replacementDays.findIndex(
+    (day) => day.label === appointment.preferredDay
+  );
+
   const ordered = replacementDays
     .map((day, index) => ({
       ...day,
-      distance: preferred < 0 ? index : Math.abs(index - preferred),
+      distance:
+        preferredIndex < 0
+          ? index
+          : Math.abs(index - preferredIndex),
     }))
     .sort((a, b) => a.distance - b.distance);
 
   const chosen = ordered.find((candidate) => {
     const key = appointment.crew + ":" + candidate.label;
-    return (crewLoad[key] ?? 0) + appointment.duration <= CREW_MOVE_CAPACITY_MINUTES;
+    return (
+      (crewLoad[key] ?? 0) + appointment.duration <=
+      CREW_MOVE_CAPACITY_MINUTES
+    );
   });
 
   return chosen ?? ordered[0];
@@ -101,7 +133,12 @@ export function buildRescheduleProposal(
     };
 
     if (decision.status === "MOVE") {
-      const replacement = chooseReplacementDay(appointment, crewLoad);
+      const replacement = chooseReplacementDay(
+        appointment,
+        crewLoad,
+        weather.eventDate
+      );
+
       next.newDay = replacement.label;
       next.newDate = addDays(weather.eventDate, replacement.offset);
 
