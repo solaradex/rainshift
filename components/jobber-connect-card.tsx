@@ -74,9 +74,16 @@ export default function JobberConnectCard() {
         throw new Error(data.error ?? "Jobber sync failed.");
       }
 
+      const weatherResponse = await fetch("/api/weather/sync", { method: "POST" });
+      if (!weatherResponse.ok) {
+        const weatherData = await weatherResponse.json().catch(() => ({}));
+        throw new Error(weatherData.error ?? "Jobber synced, but weather refresh failed.");
+      }
+
       setMessage(
-        `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs.`
+        `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs. Refreshing the RainShift proposal...`
       );
+      window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Jobber sync failed.");
     } finally {
