@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
+import { getDailyRainForecast } from "@/lib/weather/open-meteo";
 import { buildRescheduleProposal } from "@/lib/scheduling/engine";
 import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
 import type { WeatherEvent } from "@/lib/scheduling/types";
@@ -27,37 +28,75 @@ export async function POST() {
 
     if (jobberError) throw jobberError;
 
-    let weatherQuery = supabase
-      .from("weather_events")
-      .select("event_date,rain_probability,expected_inches,location")
-      .eq("company_id", companyId);
-
-    if (jobberAppointment?.scheduled_date) {
-      const day = new Date(jobberAppointment.scheduled_date).toISOString().slice(0, 10);
-      const nextDay = new Date(
-        new Date(`${day}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      weatherQuery = weatherQuery
-        .gte("event_date", `${day}T00:00:00.000Z`)
-        .lt("event_date", nextDay);
-    }
-
-    const { data: weatherRecord, error: weatherError } = await weatherQuery
-      .order("event_date", { ascending: true })
-      .limit(1)
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("service_area,service_latitude,service_longitude,timezone")
+      .eq("id", companyId)
       .maybeSingle();
 
-    if (weatherError) throw weatherError;
-
-    if (!weatherRecord) {
+    if (companyError) throw companyError;
+    if (!company) {
       return NextResponse.json(
-        { ok: false, error: "No weather event found for the active Jobber schedule" },
+        { ok: false, error: "Company not found" },
         { status: 404 }
       );
     }
 
-    const start = weatherRecord.event_date;
+    if (!jobberAppointment?.scheduled_date) {
+      return NextResponse.json(
+        { ok: false, error: "No real Jobber appointments are synced yet" },
+        { status: 404 }
+      );
+    }
+
+    const eventDate = new Date(jobberAppointment.scheduled_date)
+      .toISOString()
+      .slice(0, 10);
+
+    // Generate the forecast directly from the real Jobber date. This keeps the
+    // proposal independent of stale/demo weather rows.
+    const forecast = await getDailyRainForecast(
+      Number(company.service_latitude),
+      Number(company.service_longitude),
+      eventDate,
+      eventDate,
+      company.timezone || "America/New_York"
+    );
+
+    const day = forecast.find((item) => item.date === eventDate);
+    if (!day) {
+      throw new Error(`No forecast returned for Jobber date ${eventDate}`);
+    }
+
+    const severity =
+      day.rainProbability >= 85 || day.rainInches >= 1.75
+        ? "HIGH"
+        : day.rainProbability >= 70 || day.rainInches >= 0.75
+          ? "MEDIUM"
+          : "LOW";
+
+    const weatherId = `${companyId}-weather-${eventDate}`;
+
+    const { error: weatherUpsertError } = await supabase
+      .from("weather_events")
+      .upsert(
+        {
+          id: weatherId,
+          company_id: companyId,
+          event_date: `${eventDate}T00:00:00.000Z`,
+          rain_probability: day.rainProbability,
+          expected_inches: day.rainInches,
+          severity,
+          location: company.service_area,
+          weather_source: "open-meteo",
+          checked_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (weatherUpsertError) throw weatherUpsertError;
+
+    const start = `${eventDate}T00:00:00.000Z`;
     const end = new Date(
       new Date(start).getTime() + 24 * 60 * 60 * 1000
     ).toISOString();
@@ -66,10 +105,10 @@ export async function POST() {
     const appointments = await provider.getAppointments(start, end);
 
     const weather: WeatherEvent = {
-      location: weatherRecord.location ?? "Jacksonville",
-      eventDate: weatherRecord.event_date,
-      rainProbability: weatherRecord.rain_probability,
-      expectedInches: weatherRecord.expected_inches,
+      location: company.service_area ?? "Jacksonville",
+      eventDate: `${eventDate}T00:00:00.000Z`,
+      rainProbability: day.rainProbability,
+      expectedInches: day.rainInches,
     };
 
     const proposal = buildRescheduleProposal(appointments, weather);
@@ -83,7 +122,10 @@ export async function POST() {
   } catch (error) {
     console.error("RainShift reschedule error", error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Could not generate proposal" },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not generate proposal",
+      },
       { status: 500 }
     );
   }
