@@ -64,6 +64,7 @@ export default function Home() {
   const [error, setError] = useState("");
   const [billingLabel, setBillingLabel] = useState("ACTIVE");
   const [approvalMessage, setApprovalMessage] = useState("");
+  const [approvalMessage, setApprovalMessage] = useState("");
 
   useEffect(() => {
     async function loadProposal() {
@@ -449,6 +450,22 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
+
+            {approvalMessage && (
+              <div
+                style={{
+                  margin: "0 22px",
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  background: "#eef8f2",
+                  color: "#24633f",
+                  fontWeight: 700,
+                  fontSize: 14,
+                }}
+              >
+                {approvalMessage}
+              </div>
+            )}
 
             {approvalMessage && (
               <div
