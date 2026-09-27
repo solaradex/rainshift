@@ -92,7 +92,14 @@ export default function JobberConnectCard({ onProposal }: Props) {
         `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs and rebuilt the RainShift proposal.`
       );
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Jobber sync failed.");
+      const message = error instanceof Error ? error.message : "Jobber sync failed.";
+      if (message.includes("Reconnect Jobber")) {
+        setConnected(false);
+        setAccountName("");
+        setMessage("Jobber authorization expired. Click Connect Jobber to authorize the account again.");
+      } else {
+        setMessage(message);
+      }
     } finally {
       setSyncing(false);
     }
