@@ -239,7 +239,13 @@ export default function Home() {
         </section>
       )}
 
-      <JobberConnectCard />
+      <JobberConnectCard
+        onProposal={(nextProposal) => {
+          setApproved(false);
+          setProposal(nextProposal);
+          setError("");
+        }}
+      />
 
       {proposal && (
         <>
