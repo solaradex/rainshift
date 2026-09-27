@@ -5,7 +5,7 @@ import { decryptToken } from "@/lib/secure-token";
 import { createHash } from "node:crypto";
 
 const JOBS_QUERY = `query GetJobs($cursor: String) {
-  jobs(first: 50, after: $cursor) {
+  jobs(first: 10, after: $cursor) {
     nodes {
       id
       jobNumber
@@ -24,7 +24,7 @@ const JOBS_QUERY = `query GetJobs($cursor: String) {
           postalCode
         }
       }
-      visits(first: 50) {
+      visits(first: 10) {
         nodes {
           id
           title
@@ -32,7 +32,7 @@ const JOBS_QUERY = `query GetJobs($cursor: String) {
           endAt
           duration
           visitStatus
-          assignedUsers(first: 10) {
+          assignedUsers(first: 3) {
             nodes {
               id
               name {
