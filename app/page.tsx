@@ -45,13 +45,6 @@ export default function Home() {
   useEffect(() => {
     async function loadProposal() {
       try {
-        const weatherSyncResponse = await fetch("/api/weather/sync", {
-          method: "POST",
-        });
-
-        if (!weatherSyncResponse.ok) {
-          console.warn("Live weather sync failed; using stored weather data.");
-        }
         const billingResponse = await fetch("/api/billing/status", {
           cache: "no-store",
         });
@@ -81,6 +74,29 @@ export default function Home() {
         if (billingStatus.needsOnboarding || billingStatus.needsCheckout) {
           window.location.href = "/billing";
           return;
+        }
+
+        // When Jobber is connected, refresh real jobs before building the proposal.
+        // This makes the dashboard self-healing instead of depending on a manual sync.
+        const jobberStatusResponse = await fetch("/api/integrations/jobber/status", {
+          cache: "no-store",
+        });
+
+        if (jobberStatusResponse.ok) {
+          const jobberStatus = (await jobberStatusResponse.json()) as {
+            connected?: boolean;
+          };
+
+          if (jobberStatus.connected) {
+            const jobberSyncResponse = await fetch("/api/integrations/jobber/sync", {
+              method: "POST",
+            });
+
+            if (!jobberSyncResponse.ok) {
+              const syncData = await jobberSyncResponse.json().catch(() => ({}));
+              console.warn("Live Jobber sync failed:", syncData.error);
+            }
+          }
         }
 
         const response = await fetch("/api/reschedule", { method: "POST" });
