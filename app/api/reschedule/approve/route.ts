@@ -2,9 +2,30 @@ import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
 import { rescheduleJobberAppointment } from "@/lib/jobber-schedule";
 import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
+import { formatRescheduledDate, sendSms } from "@/lib/twilio";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
 
 type ApprovalPayload = { proposal?: RescheduleProposal };
+
+type SmsResult = {
+  appointmentId: string;
+  customer: string;
+  status: "SENT" | "SKIPPED" | "FAILED";
+  sid?: string;
+  reason?: string;
+};
+
+function buildCustomerSms(
+  customerName: string,
+  service: string,
+  newDate: string,
+  timezone: string
+) {
+  const firstName = customerName.trim().split(/\s+/)[0] || "Customer";
+  const dateLabel = formatRescheduledDate(newDate, timezone);
+
+  return `Hi ${firstName}, RainShift weather update: your ${service} service has been moved to ${dateLabel} due to the weather forecast. No action is needed. Reply to your usual lawn-care contact with questions.`;
+}
 
 export async function POST(request: Request) {
   try {
@@ -52,13 +73,14 @@ export async function POST(request: Request) {
 
     const { data: company, error: companyError } = await supabase
       .from("companies")
-      .select("timezone")
+      .select("name,timezone")
       .eq("id", companyId)
       .maybeSingle();
 
     if (companyError) throw companyError;
 
     const timezone = company?.timezone || "America/New_York";
+    const companyName = company?.name || "your lawn-care provider";
 
     const { data: jobberConnection, error: connectionError } = await supabase
       .from("scheduling_connections")
@@ -75,6 +97,8 @@ export async function POST(request: Request) {
       scheduledDate: string;
       externalId?: string;
     }> = [];
+
+    const smsResults: SmsResult[] = [];
 
     for (const item of proposal.appointments) {
       if (item.status === "KEEP") {
@@ -97,17 +121,31 @@ export async function POST(request: Request) {
 
       const { data: record, error: recordError } = await supabase
         .from("appointments")
-        .select("id,source_provider,external_id,scheduled_date,duration_minutes")
+        .select(
+          "id,source_provider,external_id,customer_id,service,scheduled_date,duration_minutes"
+        )
         .eq("id", item.id)
         .eq("company_id", companyId)
         .single();
 
       if (recordError) throw recordError;
 
+      const { data: customer, error: customerError } = await supabase
+        .from("customers")
+        .select("name,phone")
+        .eq("id", record.customer_id)
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (customerError) throw customerError;
+
       const currentStart = new Date(record.scheduled_date);
       const targetStart = new Date(item.newDate);
 
-      if (Number.isNaN(currentStart.getTime()) || Number.isNaN(targetStart.getTime())) {
+      if (
+        Number.isNaN(currentStart.getTime()) ||
+        Number.isNaN(targetStart.getTime())
+      ) {
         return NextResponse.json(
           { ok: false, error: "Invalid appointment date for " + item.id },
           { status: 400 }
@@ -164,13 +202,69 @@ export async function POST(request: Request) {
         ...updated,
         externalId: record.external_id ?? undefined,
       });
+
+      if (!customer?.phone) {
+        smsResults.push({
+          appointmentId: item.id,
+          customer: customer?.name || "Customer",
+          status: "SKIPPED",
+          reason: "Customer has no phone number on file",
+        });
+        continue;
+      }
+
+      try {
+        const sms = await sendSms({
+          to: customer.phone,
+          body: buildCustomerSms(
+            customer.name,
+            record.service,
+            startAt,
+            timezone
+          ).replace(
+            "your lawn-care provider",
+            companyName
+          ),
+        });
+
+        smsResults.push({
+          appointmentId: item.id,
+          customer: customer.name,
+          status: "SENT",
+          sid: sms.sid,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("RainShift SMS error", { appointmentId: item.id, message });
+
+        smsResults.push({
+          appointmentId: item.id,
+          customer: customer.name,
+          status: "FAILED",
+          reason: message,
+        });
+      }
     }
+
+    const sent = smsResults.filter((item) => item.status === "SENT").length;
+    const skipped = smsResults.filter((item) => item.status === "SKIPPED").length;
+    const failed = smsResults.filter((item) => item.status === "FAILED").length;
 
     return NextResponse.json({
       ok: true,
       simulated: false,
       updatedAppointments,
-      message: "Reschedule approval persisted to RainShift and Jobber.",
+      sms: {
+        attempted: smsResults.length,
+        sent,
+        skipped,
+        failed,
+        results: smsResults,
+      },
+      message:
+        failed > 0
+          ? `Reschedule approved. ${sent} customer SMS message${sent === 1 ? "" : "s"} sent; ${failed} failed.`
+          : `Reschedule approved. ${sent} customer SMS message${sent === 1 ? "" : "s"} sent.`,
     });
   } catch (error) {
     console.error("RainShift approval error", error);
