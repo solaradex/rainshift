@@ -21,20 +21,41 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: "Company not found" }, { status: 404 });
     }
 
-    const { data: weatherEvent, error: eventError } = await supabase
-      .from("weather_events")
-      .select("id,event_date")
+    // When a real Jobber schedule exists, weather should be evaluated against
+    // the actual upcoming service date instead of the demo weather date.
+    const { data: jobberAppointment, error: jobberError } = await supabase
+      .from("appointments")
+      .select("scheduled_date")
       .eq("company_id", companyId)
-      .order("event_date", { ascending: true })
+      .eq("source_provider", "jobber")
+      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
+      .order("scheduled_date", { ascending: true })
       .limit(1)
       .maybeSingle();
 
-    if (eventError) throw eventError;
-    if (!weatherEvent) {
-      return NextResponse.json({ ok: false, error: "No weather event found" }, { status: 404 });
+    if (jobberError) throw jobberError;
+
+    let eventDate: string;
+
+    if (jobberAppointment?.scheduled_date) {
+      eventDate = new Date(jobberAppointment.scheduled_date).toISOString().slice(0, 10);
+    } else {
+      const { data: weatherEvent, error: eventError } = await supabase
+        .from("weather_events")
+        .select("event_date")
+        .eq("company_id", companyId)
+        .order("event_date", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (eventError) throw eventError;
+      if (!weatherEvent) {
+        return NextResponse.json({ ok: false, error: "No weather event found" }, { status: 404 });
+      }
+
+      eventDate = new Date(weatherEvent.event_date).toISOString().slice(0, 10);
     }
 
-    const eventDate = new Date(weatherEvent.event_date).toISOString().slice(0, 10);
     const nextDate = new Date(
       new Date(`${eventDate}T12:00:00Z`).getTime() + 24 * 60 * 60 * 1000
     )
@@ -61,20 +82,26 @@ export async function POST() {
           ? "MEDIUM"
           : "LOW";
 
-    const { error: updateError } = await supabase
-      .from("weather_events")
-      .update({
-        location: company.service_area,
-        rain_probability: day.rainProbability,
-        expected_inches: day.rainInches,
-        severity,
-        weather_source: "open-meteo",
-        checked_at: new Date().toISOString(),
-      })
-      .eq("id", weatherEvent.id)
-      .eq("company_id", companyId);
+    const weatherId = `${companyId}-weather-${eventDate}`;
 
-    if (updateError) throw updateError;
+    const { error: upsertError } = await supabase
+      .from("weather_events")
+      .upsert(
+        {
+          id: weatherId,
+          company_id: companyId,
+          event_date: `${eventDate}T00:00:00.000Z`,
+          rain_probability: day.rainProbability,
+          expected_inches: day.rainInches,
+          severity,
+          location: company.service_area,
+          weather_source: "open-meteo",
+          checked_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (upsertError) throw upsertError;
 
     return NextResponse.json({
       ok: true,
