@@ -15,10 +15,31 @@ export async function POST() {
       );
     }
 
-    const { data: weatherRecord, error: weatherError } = await supabase
+    const { data: jobberAppointment, error: jobberError } = await supabase
+      .from("appointments")
+      .select("scheduled_date")
+      .eq("company_id", companyId)
+      .eq("source_provider", "jobber")
+      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
+      .order("scheduled_date", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (jobberError) throw jobberError;
+
+    let weatherQuery = supabase
       .from("weather_events")
       .select("event_date,rain_probability,expected_inches,location")
-      .eq("company_id", companyId)
+      .eq("company_id", companyId);
+
+    if (jobberAppointment?.scheduled_date) {
+      const day = new Date(jobberAppointment.scheduled_date).toISOString().slice(0, 10);
+      weatherQuery = weatherQuery
+        .gte("event_date", `${day}T00:00:00.000Z`)
+        .lt("event_date", `${day}T00:00:00.000Z`.replace("T00:00:00.000Z", "T23:59:59.999Z"));
+    }
+
+    const { data: weatherRecord, error: weatherError } = await weatherQuery
       .order("event_date", { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -27,7 +48,7 @@ export async function POST() {
 
     if (!weatherRecord) {
       return NextResponse.json(
-        { ok: false, error: "No weather event found for this company" },
+        { ok: false, error: "No weather event found for the active Jobber schedule" },
         { status: 404 }
       );
     }
@@ -57,9 +78,8 @@ export async function POST() {
     });
   } catch (error) {
     console.error("RainShift reschedule error", error);
-
     return NextResponse.json(
-      { ok: false, error: "Supabase database request failed" },
+      { ok: false, error: error instanceof Error ? error.message : "Could not generate proposal" },
       { status: 500 }
     );
   }
