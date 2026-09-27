@@ -14,6 +14,7 @@ export function createSupabaseSchedulingProvider(
         .eq("company_id", companyId)
         .gte("scheduled_date", start)
         .lt("scheduled_date", end)
+        .eq("source_provider", "jobber")
         .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
         .order("crew_id", { ascending: true })
         .order("scheduled_date", { ascending: true });
