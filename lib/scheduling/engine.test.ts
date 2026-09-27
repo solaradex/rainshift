@@ -27,3 +27,32 @@ const clearWeather = buildRescheduleProposal(demoAppointments, {
 if (clearWeather.counts.keep !== 3) {
   throw new Error("Clear weather should keep all appointments");
 }
+
+
+const jobberDate = buildRescheduleProposal(
+  [
+    {
+      id: "jobber-1",
+      customer: "Jobber Client",
+      address: "3 Main St",
+      crew: "Test Crew",
+      service: "Weekly Mow",
+      duration: 45,
+      distance: 0,
+      preferredDay: "Tue",
+    },
+  ],
+  {
+    location: "Jacksonville",
+    eventDate: "2026-09-29",
+    rainProbability: 95,
+    expectedInches: 2,
+  }
+);
+
+if (
+  jobberDate.appointments[0]?.newDay !== "Wed" ||
+  jobberDate.appointments[0]?.newDate !== "2026-09-30T00:00:00.000Z"
+) {
+  throw new Error("Replacement date should be the next valid weekday after the real Jobber date");
+}
