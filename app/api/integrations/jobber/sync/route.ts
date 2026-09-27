@@ -243,8 +243,18 @@ export async function POST() {
     });
   } catch (error) {
     console.error("RainShift Jobber sync error", error);
+    const message =
+      error instanceof Error ? error.message : "Jobber sync failed";
+
+    if (message.includes("Jobber authorization has expired")) {
+      return NextResponse.json(
+        { ok: false, error: message, reconnect: true },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : "Jobber sync failed" },
+      { ok: false, error: message },
       { status: 500 }
     );
   }
