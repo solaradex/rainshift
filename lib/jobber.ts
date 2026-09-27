@@ -131,3 +131,42 @@ export async function getJobberAccount(accessToken: string) {
     }`
   );
 }
+
+
+export async function editJobberAppointmentSchedule(
+  accessToken: string,
+  appointmentId: string,
+  schedule: {
+    startAt: string;
+    endAt: string;
+    timezone: string;
+  }
+) {
+  return jobberGraphQL<{
+    appointmentEditSchedule: {
+      userErrors: Array<{ message: string; path?: string[] }>;
+    };
+  }>(
+    accessToken,
+    `mutation EditAppointmentSchedule(
+      $appointmentId: EncodedId!
+      $input: AppointmentEditScheduleInput!
+    ) {
+      appointmentEditSchedule(
+        appointmentId: $appointmentId
+        input: $input
+      ) {
+        userErrors {
+          message
+          path
+        }
+      }
+    }`,
+    {
+      appointmentId,
+      input: {
+        schedule,
+      },
+    }
+  );
+}
