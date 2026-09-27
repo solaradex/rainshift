@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { RescheduleProposal } from "@/lib/scheduling/types";
 
-export default function JobberConnectCard() {
+type Props = {
+  onProposal?: (proposal: RescheduleProposal) => void;
+};
+
+export default function JobberConnectCard({ onProposal }: Props) {
   const [connected, setConnected] = useState(false);
   const [accountName, setAccountName] = useState("");
   const [checking, setChecking] = useState(true);
@@ -74,16 +79,18 @@ export default function JobberConnectCard() {
         throw new Error(data.error ?? "Jobber sync failed.");
       }
 
-      const weatherResponse = await fetch("/api/weather/sync", { method: "POST" });
-      if (!weatherResponse.ok) {
-        const weatherData = await weatherResponse.json().catch(() => ({}));
-        throw new Error(weatherData.error ?? "Jobber synced, but weather refresh failed.");
+      const proposalResponse = await fetch("/api/reschedule", { method: "POST" });
+      const proposalData = await proposalResponse.json();
+
+      if (!proposalResponse.ok || !proposalData.ok) {
+        throw new Error(proposalData.error ?? "Jobber synced, but RainShift could not build the proposal.");
       }
 
+      onProposal?.(proposalData.proposal as RescheduleProposal);
+
       setMessage(
-        `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs. Refreshing the RainShift proposal...`
+        `Synced ${data.appointments} visits from ${data.jobs} Jobber jobs and rebuilt the RainShift proposal.`
       );
-      window.location.reload();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Jobber sync failed.");
     } finally {
