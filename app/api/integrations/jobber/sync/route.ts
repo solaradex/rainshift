@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
-import { jobberGraphQL } from "@/lib/jobber";
-import { decryptToken } from "@/lib/secure-token";
+import { jobberGraphQL, refreshJobberAccessToken } from "@/lib/jobber";
+import { decryptToken, encryptToken } from "@/lib/secure-token";
 import { createHash } from "node:crypto";
 
 const JOBS_QUERY = `query GetJobs($cursor: String) {
@@ -97,7 +97,7 @@ export async function POST() {
 
     const { data: connection, error: connectionError } = await supabase
       .from("scheduling_connections")
-      .select("external_account_id,encrypted_access_token,active")
+      .select("id,external_account_id,encrypted_access_token,encrypted_refresh_token,active,access_token_expires_at")
       .eq("company_id", companyId)
       .eq("provider", "jobber")
       .maybeSingle();
@@ -107,11 +107,10 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: "Jobber is not connected" }, { status: 404 });
     }
 
-    const jobs: JobberJob[] = [];
-    let cursor: string | null = null;
+    let accessToken = decryptToken(connection.encrypted_access_token);
 
-    do {
-      const result: {
+    async function fetchJobsPage(currentCursor: string | null) {
+      return jobberGraphQL<{
         jobs: {
           nodes: JobberJob[];
           pageInfo: {
@@ -119,14 +118,54 @@ export async function POST() {
             endCursor?: string | null;
           };
         };
-      } = await jobberGraphQL(
-        decryptToken(connection.encrypted_access_token),
-        JOBS_QUERY,
-        { cursor }
-      );
+      }>(accessToken, JOBS_QUERY, { cursor: currentCursor });
+    }
 
-      jobs.push(...result.jobs.nodes);
-      cursor = result.jobs.pageInfo.hasNextPage ? result.jobs.pageInfo.endCursor ?? null : null;
+    const jobs: JobberJob[] = [];
+    let cursor: string | null = null;
+
+    do {
+      try {
+        const result = await fetchJobsPage(cursor);
+        jobs.push(...result.jobs.nodes);
+        cursor = result.jobs.pageInfo.hasNextPage
+          ? result.jobs.pageInfo.endCursor ?? null
+          : null;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const expired =
+          message.includes("Access token expired") ||
+          message.includes("[HTTP 401]");
+
+        if (!expired || !connection.encrypted_refresh_token) throw error;
+
+        const tokens = await refreshJobberAccessToken(
+          decryptToken(connection.encrypted_refresh_token)
+        );
+
+        const { error: saveError } = await supabase
+          .from("scheduling_connections")
+          .update({
+            encrypted_access_token: encryptToken(tokens.access_token),
+            encrypted_refresh_token: encryptToken(tokens.refresh_token),
+            access_token_expires_at: new Date(
+              Date.now() + tokens.expires_in * 1000
+            ).toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", connection.id)
+          .eq("company_id", companyId);
+
+        if (saveError) throw saveError;
+
+        accessToken = tokens.access_token;
+
+        const result = await fetchJobsPage(cursor);
+        jobs.push(...result.jobs.nodes);
+        cursor = result.jobs.pageInfo.hasNextPage
+          ? result.jobs.pageInfo.endCursor ?? null
+          : null;
+      }
     } while (cursor);
 
     const crewRows = new Map<string, { id: string; company_id: string; name: string; daily_capacity: number }>();
