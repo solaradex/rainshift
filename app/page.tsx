@@ -64,7 +64,6 @@ export default function Home() {
   const [error, setError] = useState("");
   const [billingLabel, setBillingLabel] = useState("ACTIVE");
   const [approvalMessage, setApprovalMessage] = useState("");
-  const [approvalMessage, setApprovalMessage] = useState("");
 
   useEffect(() => {
     async function loadProposal() {
