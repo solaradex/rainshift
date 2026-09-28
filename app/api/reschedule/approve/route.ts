@@ -10,7 +10,7 @@ type ApprovalPayload = { proposal?: RescheduleProposal };
 type SmsResult = {
   appointmentId: string;
   customer: string;
-  status: "SENT" | "SKIPPED" | "FAILED";
+  status: "QUEUED" | "SKIPPED" | "FAILED";
   sid?: string;
   reason?: string;
 };
@@ -227,7 +227,7 @@ export async function POST(request: Request) {
         smsResults.push({
           appointmentId: item.id,
           customer: customer.name,
-          status: "SENT",
+          status: "QUEUED",
           sid: sms.textId,
         });
       } catch (error) {
@@ -243,7 +243,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const sent = smsResults.filter((item) => item.status === "SENT").length;
+    const queued = smsResults.filter((item) => item.status === "QUEUED").length;
     const skipped = smsResults.filter((item) => item.status === "SKIPPED").length;
     const failed = smsResults.filter((item) => item.status === "FAILED").length;
 
@@ -253,15 +253,15 @@ export async function POST(request: Request) {
       updatedAppointments,
       sms: {
         attempted: smsResults.length,
-        sent,
+        queued,
         skipped,
         failed,
         results: smsResults,
       },
       message:
         failed > 0
-          ? `Reschedule approved. ${sent} customer SMS message${sent === 1 ? "" : "s"} sent; ${failed} failed.`
-          : `Reschedule approved. ${sent} customer SMS message${sent === 1 ? "" : "s"} sent.`,
+          ? `Reschedule approved. ${queued} customer SMS message${queued === 1 ? "" : "s"} queued; ${failed} failed.`
+          : `Reschedule approved. ${queued} customer SMS message${queued === 1 ? "" : "s"} queued for delivery.`,
     });
   } catch (error) {
     console.error("RainShift approval error", error);
