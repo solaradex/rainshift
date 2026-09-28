@@ -21,7 +21,8 @@ export async function POST() {
       .select("scheduled_date")
       .eq("company_id", companyId)
       .eq("source_provider", "jobber")
-      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
+      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
+      .gte("scheduled_date", new Date().toISOString())
       .order("scheduled_date", { ascending: true })
       .limit(1)
       .maybeSingle();
