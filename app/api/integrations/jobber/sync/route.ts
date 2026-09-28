@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { jobberGraphQL } from "@/lib/jobber";
 import { getJobberAccessToken } from "@/lib/jobber-tokens";
 import { decryptToken } from "@/lib/secure-token";
@@ -89,11 +90,25 @@ type JobberJob = {
   };
 };
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    const { supabase, userId, companyId } = await getCurrentCompany();
-    if (!userId || !companyId) {
-      return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+    const isCronRequest =
+      Boolean(process.env.CRON_SECRET) &&
+      request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+
+    const supabase = isCronRequest
+      ? createAdminClient()
+      : (await getCurrentCompany()).supabase;
+
+    const companyId = isCronRequest
+      ? new URL(request.url).searchParams.get("companyId")
+      : (await getCurrentCompany()).companyId;
+
+    if (!companyId) {
+      return NextResponse.json(
+        { ok: false, error: isCronRequest ? "companyId is required" : "Not authenticated" },
+        { status: isCronRequest ? 400 : 401 }
+      );
     }
 
     const { data: connection, error: connectionError } = await supabase
