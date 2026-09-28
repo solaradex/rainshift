@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
 import { rescheduleJobberAppointment } from "@/lib/jobber-schedule";
 import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
-import { formatRescheduledDate, sendSms } from "@/lib/twilio";
+import { formatRescheduledDate, sendSms } from "@/lib/sms";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
 
 type ApprovalPayload = { proposal?: RescheduleProposal };
@@ -24,7 +24,7 @@ function buildCustomerSms(
   const firstName = customerName.trim().split(/\s+/)[0] || "Customer";
   const dateLabel = formatRescheduledDate(newDate, timezone);
 
-  return `Hi ${firstName}, this is ${companyName}. Due to the weather forecast, your lawn service has been moved to ${dateLabel}. No action is needed. Reply to your usual lawn-care contact with questions.`;
+  return `Hi ${firstName}, this is ${companyName}. Due to the weather forecast, your lawn service has been moved to ${dateLabel}. No action is needed. Reply to your usual lawn-care contact with questions. Reply STOP to opt out of future texts.`;
 }
 
 export async function POST(request: Request) {
