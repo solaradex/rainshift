@@ -96,13 +96,11 @@ export async function POST(request: Request) {
       Boolean(process.env.CRON_SECRET) &&
       request.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
 
-    const supabase = isCronRequest
-      ? createAdminClient()
-      : (await getCurrentCompany()).supabase;
-
+    const currentCompany = isCronRequest ? null : await getCurrentCompany();
+    const supabase = isCronRequest ? createAdminClient() : currentCompany!.supabase;
     const companyId = isCronRequest
       ? new URL(request.url).searchParams.get("companyId")
-      : (await getCurrentCompany()).companyId;
+      : currentCompany!.companyId;
 
     if (!companyId) {
       return NextResponse.json(
