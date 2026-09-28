@@ -13,15 +13,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
       - name: Install dependencies
         run: npm install
-
       - name: Run scheduler regression tests
-        run: npx --yes tsx --test lib/scheduling/engine.test.ts
+        run: npm run test:scheduler
