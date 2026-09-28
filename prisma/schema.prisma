@@ -50,6 +50,7 @@ model Company {
   weatherEvents  WeatherEvent[]
   billingAccount BillingAccount?
   companyMembers CompanyMember[]
+  notificationLogs NotificationLog[]
 
   @@index([ownerUserId])
   @@map("companies")
@@ -135,6 +136,26 @@ model Appointment {
   @@index([companyId, scheduledDate])
   @@index([crewId, scheduledDate])
   @@map("appointments")
+}
+
+model NotificationLog {
+  id                 String      @id @default(uuid()) @db.Uuid
+  companyId          String      @map("company_id")
+  appointmentId      String?     @map("appointment_id")
+  channel            String      @default("sms")
+  notificationType   String      @map("notification_type")
+  destination        String
+  status             String
+  providerMessageId  String?     @map("provider_message_id")
+  dedupeKey          String      @unique @map("dedupe_key")
+  errorMessage       String?     @map("error_message")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+  company            Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  appointment        Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@map("notification_logs")
 }
 
 model WeatherEvent {
