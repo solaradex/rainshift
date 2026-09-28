@@ -89,7 +89,7 @@ export async function GET(request: Request) {
           .eq("source_provider", "jobber")
           .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
           .order("scheduled_date", { ascending: true })
-          .limit(100);
+          .limit(500);
 
         if (appointmentError) throw appointmentError;
 
@@ -110,11 +110,7 @@ export async function GET(request: Request) {
           if (!day) continue;
 
           const level = severity(day.rainProbability, day.rainInches);
-          const dayRows = (rows ?? []).filter(
-            (row) => dateInZone(row.scheduled_date, timezone) === eventDate
-          );
-
-          const appointments: DemoAppointment[] = dayRows.map((row) => {
+          const allAppointments: DemoAppointment[] = (rows ?? []).map((row) => {
             const customer = Array.isArray(row.customers) ? row.customers[0] : row.customers;
             const crew = Array.isArray(row.crews) ? row.crews[0] : row.crews;
 
@@ -127,8 +123,16 @@ export async function GET(request: Request) {
               duration: row.duration_minutes,
               distance: 0,
               preferredDay: customer?.preferred_days?.[0] || "Thu",
+              scheduledDate: row.scheduled_date,
             };
           });
+
+          const appointments = allAppointments.filter(
+            (appointment) => appointment.scheduledDate?.slice(0, 10) === eventDate
+          );
+          const futureAppointments = allAppointments.filter(
+            (appointment) => appointment.scheduledDate?.slice(0, 10) !== eventDate
+          );
 
           const weather: WeatherEvent = {
             location: company.service_area || "Service area",
@@ -137,7 +141,11 @@ export async function GET(request: Request) {
             expectedInches: day.rainInches,
           };
 
-          const proposal = buildRescheduleProposal(appointments, weather);
+          const proposal = buildRescheduleProposal(
+            appointments,
+            weather,
+            futureAppointments
+          );
           const needsAttention = level !== "LOW" && (proposal.counts.move > 0 || proposal.counts.review > 0);
           const signature = `${level}:${day.rainProbability}:${day.rainInches}:${proposal.counts.move}:${proposal.counts.review}`;
 
