@@ -13,7 +13,8 @@
     "db:seed": "prisma db seed",
     "postinstall": "prisma generate",
     "db:setup": "prisma db push && prisma db seed",
-    "paypal:setup": "node --env-file=.env.local scripts/paypal-setup.mjs"
+    "paypal:setup": "node --env-file=.env.local scripts/paypal-setup.mjs",
+    "test:scheduler": "npx --yes tsx --test lib/scheduling/engine.test.ts"
   },
   "dependencies": {
     "next": "16.3.4",
