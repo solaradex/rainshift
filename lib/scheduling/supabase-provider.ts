@@ -15,7 +15,7 @@ export function createSupabaseSchedulingProvider(
         .gte("scheduled_date", start)
         .lt("scheduled_date", end)
         .eq("source_provider", "jobber")
-        .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
+        .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
         .order("crew_id", { ascending: true })
         .order("scheduled_date", { ascending: true });
 
@@ -61,6 +61,7 @@ export function createSupabaseSchedulingProvider(
           duration: record.duration_minutes,
           distance: 0,
           preferredDay: customer.preferred_days[0] ?? "Thu",
+          scheduledDate: record.scheduled_date,
         } satisfies DemoAppointment;
       });
     },
