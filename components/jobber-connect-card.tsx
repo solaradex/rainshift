@@ -73,7 +73,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
     setSmsTesting(true);
     setMessage("");
     try {
-      const response = await fetch("/api/integrations/twilio/test", {
+      const response = await fetch("/api/integrations/sms/test", {
         method: "POST",
       });
       const data = await response.json();
