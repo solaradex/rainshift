@@ -9,6 +9,7 @@ export type DemoAppointment = {
   duration: number;
   distance: number;
   preferredDay: string;
+  scheduledDate?: string;
 };
 
 export type WeatherEvent = {
