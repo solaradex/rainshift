@@ -31,7 +31,7 @@ export async function POST() {
 
     return NextResponse.json({
       ok: true,
-      sid: result.sid,
+      textId: result.textId,
       status: result.status,
       message: "Test SMS sent.",
     });
