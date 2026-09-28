@@ -162,7 +162,9 @@ export async function GET(request: Request) {
                 location: company.service_area,
                 weather_source: "open-meteo",
                 checked_at: new Date().toISOString(),
-                weather_alert_signature: needsAttention ? signature : null,
+                weather_alert_signature: needsAttention
+                  ? existing?.weather_alert_signature || null
+                  : null,
               },
               { onConflict: "id" }
             );
@@ -191,7 +193,10 @@ export async function GET(request: Request) {
 
               await db
                 .from("weather_events")
-                .update({ weather_alert_sent_at: new Date().toISOString() })
+.update({
+                  weather_alert_sent_at: new Date().toISOString(),
+                  weather_alert_signature: signature,
+                })
                 .eq("id", `${link.company_id}-weather-${eventDate}`);
 
               alerts += 1;
