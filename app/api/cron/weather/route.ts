@@ -31,6 +31,21 @@ export async function GET(request: Request) {
     let updated = 0;
 
     for (const link of links ?? []) {
+      const syncUrl = new URL("/api/integrations/jobber/sync", request.url);
+      syncUrl.searchParams.set("companyId", link.company_id);
+
+      const syncResponse = await fetch(syncUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${process.env.CRON_SECRET}`,
+        },
+        cache: "no-store",
+      });
+
+      if (!syncResponse.ok) {
+        throw new Error(`Jobber sync failed with HTTP ${syncResponse.status}`);
+      }
+
       const { data: company, error: companyError } = await db
         .from("companies")
         .select("service_area,service_latitude,service_longitude,timezone")
