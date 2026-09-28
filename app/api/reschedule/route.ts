@@ -96,13 +96,21 @@ export async function POST() {
 
     if (weatherUpsertError) throw weatherUpsertError;
 
+    // Load the affected day plus the following week so the engine can account
+    // for existing crew workload before placing moved visits.
     const start = `${eventDate}T00:00:00.000Z`;
     const end = new Date(
-      new Date(start).getTime() + 24 * 60 * 60 * 1000
+      new Date(start).getTime() + 8 * 24 * 60 * 60 * 1000
     ).toISOString();
 
     const provider = createSupabaseSchedulingProvider(supabase, companyId);
-    const appointments = await provider.getAppointments(start, end);
+    const scheduleWindow = await provider.getAppointments(start, end);
+    const eventAppointments = scheduleWindow.filter(
+      (appointment) => appointment.scheduledDate?.slice(0, 10) === eventDate
+    );
+    const futureAppointments = scheduleWindow.filter(
+      (appointment) => appointment.scheduledDate?.slice(0, 10) !== eventDate
+    );
 
     const weather: WeatherEvent = {
       location: company.service_area ?? "Jacksonville",
@@ -111,7 +119,11 @@ export async function POST() {
       expectedInches: day.rainInches,
     };
 
-    const proposal = buildRescheduleProposal(appointments, weather);
+    const proposal = buildRescheduleProposal(
+      eventAppointments,
+      weather,
+      futureAppointments
+    );
     proposal.companyId = companyId;
 
     return NextResponse.json({
