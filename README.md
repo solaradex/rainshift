@@ -90,3 +90,6 @@ Replacement dates are selected from Thursday through Saturday while keeping each
 - Weather API
 - Google Maps
 - Twilio
+
+
+<!-- Vercel deployment sync: latest SMS provider changes -->
