@@ -63,7 +63,7 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<SendSmsResult
   try {
     data = JSON.parse(raw) as typeof data;
   } catch {
-    // Preserve a useful error even if Textbelt returns non-JSON.
+    // Preserve a useful error even if the SMS provider returns non-JSON.
   }
 
   const result = data.data;
