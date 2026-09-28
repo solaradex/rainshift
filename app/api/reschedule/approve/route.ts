@@ -228,7 +228,7 @@ export async function POST(request: Request) {
           appointmentId: item.id,
           customer: customer.name,
           status: "SENT",
-          sid: sms.sid,
+          sid: sms.textId,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
