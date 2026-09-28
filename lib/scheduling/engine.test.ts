@@ -1,58 +1,106 @@
+import test from "node:test";
+import assert from "node:assert/strict";
 import { buildRescheduleProposal } from "./engine";
 
-const demoAppointments = [
-  { id: "1", customer: "Mow Client", address: "1 Main St", crew: "A", service: "Weekly Mow", duration: 45, distance: 1, preferredDay: "Wed" },
-  { id: "2", customer: "Landscape Client", address: "2 Main St", crew: "B", service: "Landscape Bed", duration: 90, distance: 2, preferredDay: "Wed" },
-  { id: "3", customer: "Cleanup Client", address: "3 Main St", crew: "C", service: "Cleanup", duration: 120, distance: 3, preferredDay: "Wed" },
-];
+const eventDate = "2026-09-28T00:00:00.000Z";
 
-const mediumRisk = buildRescheduleProposal(demoAppointments, {
-  location: "Jacksonville",
-  eventDate: "2026-09-28",
-  rainProbability: 82,
-  expectedInches: 1.4,
-});
-
-if (mediumRisk.counts.move !== 1 || mediumRisk.counts.review !== 2) {
-  throw new Error("Medium-risk proposal should move routine work and review specialty work");
-}
-
-const clearWeather = buildRescheduleProposal(demoAppointments, {
-  location: "Jacksonville",
-  eventDate: "2026-09-29",
-  rainProbability: 20,
-  expectedInches: 0.1,
-});
-
-if (clearWeather.counts.keep !== 3) {
-  throw new Error("Clear weather should keep all appointments");
-}
-
-
-const jobberDate = buildRescheduleProposal(
-  [
-    {
-      id: "jobber-1",
-      customer: "Jobber Client",
-      address: "3 Main St",
-      crew: "Test Crew",
-      service: "Weekly Mow",
-      duration: 45,
-      distance: 0,
-      preferredDay: "Tue",
-    },
-  ],
-  {
-    location: "Jacksonville",
-    eventDate: "2026-09-29",
-    rainProbability: 95,
-    expectedInches: 2,
-  }
-);
-
-if (
-  jobberDate.appointments[0]?.newDay !== "Wed" ||
-  jobberDate.appointments[0]?.newDate !== "2026-09-30T00:00:00.000Z"
+function appointment(
+  id: string,
+  duration: number,
+  service = "Lawn Mowing",
+  preferredDay = "Tue",
+  scheduledDate = eventDate
 ) {
-  throw new Error("Replacement date should be the next valid weekday after the real Jobber date");
+  return {
+    id,
+    customer: id,
+    address: "123 Test St",
+    crew: "Crew A",
+    service,
+    duration,
+    distance: 0,
+    preferredDay,
+    scheduledDate,
+  };
 }
+
+const highRain = {
+  location: "Jacksonville",
+  eventDate,
+  rainProbability: 90,
+  expectedInches: 2,
+};
+
+test("uses existing future workload and prefers capacity-aware replacement days", () => {
+  const affected = [
+    appointment("long", 120),
+    appointment("short", 60),
+  ];
+
+  const future = [
+    appointment(
+      "tuesday-existing",
+      360,
+      "Lawn Mowing",
+      "Tue",
+      "2026-09-29T12:00:00.000Z"
+    ),
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+  const longMove = proposal.appointments.find((item) => item.id === "long");
+  const shortMove = proposal.appointments.find((item) => item.id === "short");
+
+  assert.equal(longMove?.status, "MOVE");
+  assert.equal(longMove?.newDate?.slice(0, 10), "2026-09-30");
+  assert.equal(shortMove?.status, "MOVE");
+  assert.equal(shortMove?.newDate?.slice(0, 10), "2026-09-29");
+  assert.deepEqual(proposal.counts, { move: 2, keep: 0, review: 0 });
+});
+
+test("returns REVIEW when no replacement day has enough capacity", () => {
+  const affected = [
+    appointment("move-1", 180),
+    appointment("move-2", 180),
+  ];
+
+  const future = [
+    appointment("tue-load", 300, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+    appointment("wed-load", 300, "Lawn Mowing", "Wed", "2026-09-30T12:00:00.000Z"),
+    appointment("thu-load", 300, "Lawn Mowing", "Thu", "2026-10-01T12:00:00.000Z"),
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+
+  assert.equal(proposal.appointments.every((item) => item.status === "REVIEW"), true);
+  assert.deepEqual(proposal.counts, { move: 0, keep: 0, review: 2 });
+  assert.match(
+    proposal.appointments[0]?.reason ?? "",
+    /No replacement day has enough crew capacity/
+  );
+});
+
+test("keeps surface-sensitive work for human review at medium rain risk", () => {
+  const mediumRain = {
+    location: "Jacksonville",
+    eventDate,
+    rainProbability: 75,
+    expectedInches: 0.8,
+  };
+
+  const proposal = buildRescheduleProposal(
+    [
+      appointment("bed", 90, "Landscape Bed"),
+      appointment("mow", 60, "Lawn Mowing"),
+    ],
+    mediumRain
+  );
+
+  const bed = proposal.appointments.find((item) => item.id === "bed");
+  const mow = proposal.appointments.find((item) => item.id === "mow");
+
+  assert.equal(bed?.status, "REVIEW");
+  assert.equal(mow?.status, "MOVE");
+  assert.equal(proposal.counts.move, 1);
+  assert.equal(proposal.counts.review, 1);
+});
