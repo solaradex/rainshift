@@ -57,7 +57,7 @@ function adminClient() {
   });
 }
 
-async function processWebhook(event: JobberWebhook) {
+async function processWebhook(event: JobberWebhook, baseUrl: string) {
   const webhook = event.data?.webHookEvent;
   if (!webhook?.topic || !SUPPORTED_TOPICS.has(webhook.topic)) return;
 
@@ -112,7 +112,7 @@ async function processWebhook(event: JobberWebhook) {
   }
 
   // Job events identify the changed Jobber Job via itemId.
-  // The next sync step will query Jobber using itemId and update RainShift.
+  // Refresh the company's synced schedule asynchronously after acknowledging Jobber.
   await supabase.from("integration_webhook_events").insert({
     provider: "jobber",
     topic,
@@ -122,6 +122,27 @@ async function processWebhook(event: JobberWebhook) {
     payload: event,
     processed_at: new Date().toISOString(),
   });
+
+  if (process.env.CRON_SECRET) {
+    const syncUrl = new URL("/api/integrations/jobber/sync", baseUrl);
+    syncUrl.searchParams.set("companyId", connection.company_id);
+
+    const response = await fetch(syncUrl, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${process.env.CRON_SECRET}`,
+      },
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error("RainShift webhook-triggered Jobber sync failed", {
+        status: response.status,
+        companyId: connection.company_id,
+        topic,
+      });
+    }
+  }
 }
 
 export async function POST(request: Request) {
@@ -157,7 +178,7 @@ export async function POST(request: Request) {
     // Process storage/side effects after the response is returned.
     after(async () => {
       try {
-        await processWebhook(payload);
+        await processWebhook(payload, new URL(request.url).origin);
       } catch (error) {
         console.error("RainShift Jobber webhook processing error", error);
       }
