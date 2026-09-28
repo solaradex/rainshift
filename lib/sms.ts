@@ -1,7 +1,11 @@
-const TEXTBELT_API_URL = "https://textbelt.com/text";
+const TEXTBEE_API_URL = "https://api.textbee.dev/api/v1/gateway/send-sms";
 
-function getTextbeltKey() {
-  return process.env.TEXTBELT_API_KEY || "textbelt";
+function getTextbeeKey() {
+  const apiKey = process.env.TEXTBEE_API_KEY;
+  if (!apiKey) {
+    throw new Error("TEXTBEE_API_KEY is not configured");
+  }
+  return apiKey;
 }
 
 function normalizePhone(phone: string) {
@@ -30,26 +34,25 @@ export type SendSmsResult = {
 };
 
 export async function sendSms({ to, body }: SendSmsInput): Promise<SendSmsResult> {
-  const response = await fetch(TEXTBELT_API_URL, {
+  const response = await fetch(TEXTBEE_API_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
+      "x-api-key": getTextbeeKey(),
+      "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: new URLSearchParams({
-      phone: normalizePhone(to),
+    body: JSON.stringify({
+      recipients: [normalizePhone(to)],
       message: body,
-      key: getTextbeltKey(),
     }),
     cache: "no-store",
   });
 
   const raw = await response.text();
   let data: {
-    success?: boolean;
-    textId?: string | number;
-    quotaRemaining?: number;
+    batchId?: string;
     error?: string;
+    message?: string;
   } = {};
 
   try {
@@ -58,16 +61,15 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<SendSmsResult
     // Preserve a useful error even if Textbelt returns non-JSON.
   }
 
-  if (!response.ok || !data.success || data.textId == null) {
+  if (!response.ok || !data.batchId) {
     throw new Error(
-      `SMS delivery failed [${response.status}]: ${data.error || raw || "Textbelt rejected the message"}`
+      `SMS delivery failed [${response.status}]: ${data.error || data.message || raw || "Textbee rejected the message"}`
     );
   }
 
   return {
-    textId: String(data.textId),
+    textId: data.batchId,
     status: "SENT",
-    quotaRemaining: data.quotaRemaining,
   };
 }
 
