@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { after, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL } from "@/lib/supabase/config";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
@@ -43,25 +42,11 @@ function verifySignature(rawBody: string, signature: string) {
   );
 }
 
-function adminClient() {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceRoleKey) {
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is not configured");
-  }
-
-  return createClient(SUPABASE_URL, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
-}
-
 async function processWebhook(event: JobberWebhook, baseUrl: string) {
   const webhook = event.data?.webHookEvent;
   if (!webhook?.topic || !SUPPORTED_TOPICS.has(webhook.topic)) return;
 
-  const supabase = adminClient();
+  const supabase = createAdminClient();
   const topic = webhook.topic;
   const accountId = webhook.accountId ?? null;
   const itemId = webhook.itemId ?? null;
