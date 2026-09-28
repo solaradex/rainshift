@@ -13,12 +13,12 @@ export async function POST() {
       );
     }
 
-    const testNumber = process.env.TEXTBELT_TEST_TO_NUMBER;
+    const testNumber = process.env.TEXTBEE_TEST_TO_NUMBER;
     if (!testNumber) {
       return NextResponse.json(
         {
           ok: false,
-          error: "TEXTBELT_TEST_TO_NUMBER is not configured",
+          error: "TEXTBEE_TEST_TO_NUMBER is not configured",
         },
         { status: 400 }
       );
