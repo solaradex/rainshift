@@ -213,6 +213,67 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const dedupeKey = `customer-reschedule:${item.id}:${startAt}:${customer.phone}`;
+      const { data: existingNotification, error: notificationLookupError } = await supabase
+        .from("notification_logs")
+        .select("id,status,provider_message_id")
+        .eq("company_id", companyId)
+        .eq("dedupe_key", dedupeKey)
+        .maybeSingle();
+
+      if (notificationLookupError) throw notificationLookupError;
+
+      if (
+        existingNotification?.status === "QUEUED" ||
+        existingNotification?.status === "SENT"
+      ) {
+        smsResults.push({
+          appointmentId: item.id,
+          customer: customer.name,
+          status: "QUEUED",
+          sid: existingNotification.provider_message_id ?? undefined,
+          reason: "Already queued for this appointment/date",
+        });
+        continue;
+      }
+
+      const { error: pendingNotificationError } = await supabase
+        .from("notification_logs")
+        .insert({
+          company_id: companyId,
+          appointment_id: item.id,
+          channel: "sms",
+          notification_type: "CUSTOMER_RESCHEDULE",
+          destination: customer.phone,
+          status: "PENDING",
+          dedupe_key: dedupeKey,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (pendingNotificationError && pendingNotificationError.code !== "23505") {
+        throw pendingNotificationError;
+      }
+
+      if (pendingNotificationError?.code === "23505") {
+        const { data: duplicate } = await supabase
+          .from("notification_logs")
+          .select("status,provider_message_id")
+          .eq("company_id", companyId)
+          .eq("dedupe_key", dedupeKey)
+          .maybeSingle();
+
+        if (duplicate?.status === "QUEUED" || duplicate?.status === "SENT") {
+          smsResults.push({
+            appointmentId: item.id,
+            customer: customer.name,
+            status: "QUEUED",
+            sid: duplicate.provider_message_id ?? undefined,
+            reason: "Already queued for this appointment/date",
+          });
+          continue;
+        }
+      }
+
       try {
         const sms = await sendSms({
           to: customer.phone,
@@ -224,6 +285,17 @@ export async function POST(request: Request) {
           ),
         });
 
+        await supabase
+          .from("notification_logs")
+          .update({
+            status: "QUEUED",
+            provider_message_id: sms.textId,
+            error_message: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("company_id", companyId)
+          .eq("dedupe_key", dedupeKey);
+
         smsResults.push({
           appointmentId: item.id,
           customer: customer.name,
@@ -233,6 +305,16 @@ export async function POST(request: Request) {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("RainShift SMS error", { appointmentId: item.id, message });
+
+        await supabase
+          .from("notification_logs")
+          .update({
+            status: "FAILED",
+            error_message: message,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("company_id", companyId)
+          .eq("dedupe_key", dedupeKey);
 
         smsResults.push({
           appointmentId: item.id,
