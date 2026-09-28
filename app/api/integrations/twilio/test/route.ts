@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
-import { sendSms } from "@/lib/twilio";
+import { sendSms } from "@/lib/sms";
 
 export async function POST() {
   try {
@@ -13,12 +13,12 @@ export async function POST() {
       );
     }
 
-    const testNumber = process.env.TWILIO_TEST_TO_NUMBER;
+    const testNumber = process.env.TEXTBELT_TEST_TO_NUMBER;
     if (!testNumber) {
       return NextResponse.json(
         {
           ok: false,
-          error: "TWILIO_TEST_TO_NUMBER is not configured",
+          error: "TEXTBELT_TEST_TO_NUMBER is not configured",
         },
         { status: 400 }
       );
