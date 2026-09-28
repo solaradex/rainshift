@@ -87,7 +87,8 @@ export async function GET(request: Request) {
           .select("id,service,duration_minutes,scheduled_date,customer_id,crew_id,customers(name,address,preferred_days),crews(name)")
           .eq("company_id", link.company_id)
           .eq("source_provider", "jobber")
-          .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW"])
+          .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
+          .gte("scheduled_date", new Date().toISOString())
           .order("scheduled_date", { ascending: true })
           .limit(500);
 
