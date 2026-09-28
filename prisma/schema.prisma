@@ -133,6 +133,7 @@ model Appointment {
   customer        Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
   crew            Crew              @relation(fields: [crewId], references: [id], onDelete: Cascade)
   company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  notificationLogs NotificationLog[]
 
   @@index([companyId, scheduledDate])
   @@index([crewId, scheduledDate])
