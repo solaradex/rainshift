@@ -42,8 +42,9 @@ model Company {
   name           String
   timezone       String         @default("America/New_York")
   createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  ownerUserId    String?        @map("owner_user_id") @db.Uuid
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  ownerUserId      String?        @map("owner_user_id") @db.Uuid
+  notificationPhone String?      @map("notification_phone")
   crews          Crew[]
   customers      Customer[]
   appointments   Appointment[]
