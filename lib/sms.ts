@@ -29,7 +29,7 @@ export type SendSmsInput = {
 
 export type SendSmsResult = {
   textId: string;
-  status: string;
+  status: "QUEUED" | "SENT";
   quotaRemaining?: number;
 };
 
@@ -50,7 +50,12 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<SendSmsResult
 
   const raw = await response.text();
   let data: {
-    batchId?: string;
+    data?: {
+      success?: boolean;
+      message?: string;
+      smsBatchId?: string;
+      recipientCount?: number;
+    };
     error?: string;
     message?: string;
   } = {};
@@ -61,15 +66,17 @@ export async function sendSms({ to, body }: SendSmsInput): Promise<SendSmsResult
     // Preserve a useful error even if Textbelt returns non-JSON.
   }
 
-  if (!response.ok || !data.batchId) {
+  const result = data.data;
+
+  if (!response.ok || !result?.success || !result.smsBatchId) {
     throw new Error(
-      `SMS delivery failed [${response.status}]: ${data.error || data.message || raw || "Textbee rejected the message"}`
+      `SMS delivery failed [${response.status}]: ${data.error || data.message || result?.message || raw || "Textbee rejected the message"}`
     );
   }
 
   return {
-    textId: data.batchId,
-    status: "SENT",
+    textId: result.smsBatchId,
+    status: "QUEUED",
   };
 }
 
