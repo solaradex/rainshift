@@ -14,6 +14,8 @@ export default function JobberConnectCard({ onProposal }: Props) {
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [smsTesting, setSmsTesting] = useState(false);
+  const [notificationPhone, setNotificationPhone] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadStatus() {
@@ -29,8 +31,32 @@ export default function JobberConnectCard({ onProposal }: Props) {
     setChecking(false);
   }
 
+  async function loadNotificationPhone() {
+    const response = await fetch("/api/settings/notifications", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    setNotificationPhone(data.notificationPhone ?? "");
+  }
+
+  async function saveNotificationPhone() {
+    setSavingPhone(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/settings/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notificationPhone }),
+      });
+      const data = await response.json();
+      setMessage(response.ok && data.ok ? data.message : data.error ?? "Could not save alert phone.");
+    } finally {
+      setSavingPhone(false);
+    }
+  }
+
   useEffect(() => {
     loadStatus();
+    loadNotificationPhone();
     const params = new URLSearchParams(window.location.search);
 
     if (params.get("jobber") === "connected") {
@@ -80,7 +106,7 @@ export default function JobberConnectCard({ onProposal }: Props) {
       setMessage(
         response.ok && data.ok
           ? "Test SMS sent successfully."
-          : data.error ?? "Twilio SMS test failed."
+          : data.error ?? "SMS test failed."
       );
     } finally {
       setSmsTesting(false);
@@ -138,6 +164,53 @@ export default function JobberConnectCard({ onProposal }: Props) {
       <p style={{ margin: 0, color: "#667487", lineHeight: 1.5 }}>
         Connect your Jobber account. RainShift will pull the schedule, check the weather, and prepare any needed changes.
       </p>
+
+      <div
+        style={{
+          marginTop: 16,
+          padding: 14,
+          borderRadius: 12,
+          background: "#f7f9fc",
+          border: "1px solid #e1e7ef",
+        }}
+      >
+        <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>
+          Weather alert phone
+        </div>
+        <div style={{ fontSize: 12, color: "#6b7787", marginBottom: 9 }}>
+          RainShift will text this number when a weather event needs review.
+        </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input
+            value={notificationPhone}
+            onChange={(event) => setNotificationPhone(event.target.value)}
+            placeholder="+1 555 555 5555"
+            inputMode="tel"
+            style={{
+              flex: "1 1 240px",
+              border: "1px solid #ccd5df",
+              borderRadius: 10,
+              padding: "10px 12px",
+              fontSize: 14,
+            }}
+          />
+          <button
+            onClick={saveNotificationPhone}
+            disabled={savingPhone}
+            style={{
+              border: 0,
+              padding: "10px 14px",
+              borderRadius: 10,
+              background: "#13243a",
+              color: "white",
+              fontWeight: 800,
+              cursor: savingPhone ? "default" : "pointer",
+            }}
+          >
+            {savingPhone ? "Saving..." : "Save alert phone"}
+          </button>
+        </div>
+      </div>
 
       <div style={{ marginTop: 14, fontWeight: 700 }}>
         {checking ? "Checking connection..." : connected ? `Connected · ${accountName}` : "Not connected"}
