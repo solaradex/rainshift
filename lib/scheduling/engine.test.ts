@@ -130,6 +130,11 @@ test("prefers the lower incremental route cost when capacity is equal", () => {
       latitude: 30.6000,
       longitude: -81.8000,
     },
+    {
+      ...appointment("far-thu", 120, "Lawn Mowing", "Thu", "2026-10-01T12:00:00.000Z"),
+      latitude: 30.7000,
+      longitude: -81.9000,
+    },
   ];
 
   const proposal = buildRescheduleProposal(affected, highRain, future);
