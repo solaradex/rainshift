@@ -5,6 +5,7 @@ export type DemoAppointment = {
   customer: string;
   address: string;
   crew: string;
+  crewId?: string;
   service: string;
   duration: number;
   distance: number;
@@ -40,6 +41,7 @@ export type RouteBoardStop = {
   address: string;
   service: string;
   crew: string;
+  crewId?: string;
   start: string;
   duration: number;
   status: "SCHEDULED" | "MOVE";
@@ -53,6 +55,7 @@ export type RouteBoardDay = {
   date: string;
   label: string;
   crew: string;
+  crewId?: string;
   stops: RouteBoardStop[];
   serviceMinutes: number;
   driveMinutes?: number;
