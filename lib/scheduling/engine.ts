@@ -7,6 +7,10 @@ import type {
 
 type CrewLoad = Record<string, number>;
 
+type RoutePoint = { latitude: number; longitude: number };
+
+type CrewRoutes = Record<string, RoutePoint[]>;
+
 const AUTO_MOVE_RAIN_PROBABILITY = 85;
 const AUTO_MOVE_RAIN_INCHES = 1.75;
 const REVIEW_RAIN_PROBABILITY = 70;
@@ -14,6 +18,93 @@ const REVIEW_RAIN_INCHES = 0.75;
 
 // Leave a 60-minute operating buffer for breaks, traffic, delays, and overruns.
 const CREW_MOVE_CAPACITY_MINUTES = 420;
+
+// Approximate driving distance is deliberately local and dependency-free.
+// A paid routing API can replace this later without changing the scheduler contract.
+function haversineMiles(a: RoutePoint, b: RoutePoint) {
+  const earthRadiusMiles = 3958.8;
+  const lat1 = (a.latitude * Math.PI) / 180;
+  const lat2 = (b.latitude * Math.PI) / 180;
+  const dLat = lat2 - lat1;
+  const dLon = ((b.longitude - a.longitude) * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h));
+}
+
+function pointFor(appointment: DemoAppointment): RoutePoint | null {
+  if (
+    typeof appointment.latitude !== "number" ||
+    typeof appointment.longitude !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    latitude: appointment.latitude,
+    longitude: appointment.longitude,
+  };
+}
+
+function insertionRouteCostMiles(
+  appointment: DemoAppointment,
+  route: RoutePoint[]
+) {
+  const point = pointFor(appointment);
+
+  if (!point) {
+    return appointment.distance;
+  }
+
+  if (route.length === 0) {
+    return 0;
+  }
+
+  let best = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index <= route.length; index += 1) {
+    const before = route[index - 1];
+    const after = route[index];
+
+    const cost =
+      before && after
+        ? haversineMiles(before, point) +
+          haversineMiles(point, after) -
+          haversineMiles(before, after)
+        : before
+          ? haversineMiles(before, point)
+          : haversineMiles(point, after);
+
+    best = Math.min(best, cost);
+  }
+
+  return Number.isFinite(best) ? best : appointment.distance;
+}
+
+function buildExistingRoutes(
+  existingAppointments: DemoAppointment[],
+  replacementDays: Array<{ label: string; date: string }>
+) {
+  const routes: CrewRoutes = {};
+
+  for (const appointment of existingAppointments) {
+    const point = pointFor(appointment);
+    if (!point || !appointment.scheduledDate) continue;
+
+    const scheduled = dateKey(appointment.scheduledDate);
+    const replacement = replacementDays.find(
+      (day) => day.date.slice(0, 10) === scheduled
+    );
+    if (!replacement) continue;
+
+    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    (routes[key] ??= []).push(point);
+  }
+
+  return routes;
+}
 
 function classifyAppointment(
   appointment: DemoAppointment,
@@ -130,8 +221,14 @@ function chooseReplacementDay(
           preferredIndex < 0 ? index : Math.abs(index - preferredIndex),
         load:
           crewLoad[appointment.crew + ":" + day.date.slice(0, 10)] ?? 0,
+        routeCost:
+          insertionRouteCostMiles(
+            appointment,
+            crewRoutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? []
+          ),
       }))
       .sort((a, b) =>
+        a.routeCost - b.routeCost ||
         a.preferenceDistance - b.preferenceDistance ||
         a.load - b.load ||
         a.offset - b.offset
@@ -150,6 +247,7 @@ export function buildRescheduleProposal(
 ): RescheduleProposal {
   const replacementDays = getReplacementDays(weather.eventDate);
   const crewLoad = buildExistingLoad(existingAppointments, replacementDays);
+  const crewRoutes = buildExistingRoutes(existingAppointments, replacementDays);
   const proposed: ProposedAppointment[] = [];
 
   // Keep the same crew order used by the provider, then place longer jobs first
@@ -186,6 +284,8 @@ export function buildRescheduleProposal(
 
         const key = appointment.crew + ":" + replacement.date.slice(0, 10);
         crewLoad[key] = (crewLoad[key] ?? 0) + appointment.duration;
+        const point = pointFor(appointment);
+        if (point) (crewRoutes[key] ??= []).push(point);
       }
     }
 
