@@ -166,7 +166,13 @@ export async function POST(request: Request) {
       }
     } while (cursor);
 
-    const crewRows = new Map<string, { id: string; company_id: string; name: string; daily_capacity: number }>();
+    const crewRows = new Map<string, {
+      id: string;
+      company_id: string;
+      name: string;
+      daily_capacity: number;
+      jobber_user_id: string | null;
+    }>();
     const customerRows = new Map<string, { id: string; company_id: string; name: string; phone: string | null; address: string; preferred_days: string[] }>();
     const appointmentRows: Record<string, unknown>[] = [];
 
@@ -195,6 +201,7 @@ export async function POST(request: Request) {
           company_id: companyId,
           name: crewName,
           daily_capacity: 480,
+          jobber_user_id: crew?.id ?? null,
         });
 
         const preferredDay = scheduledDate.toLocaleDateString("en-US", {
