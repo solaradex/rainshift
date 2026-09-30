@@ -54,6 +54,22 @@ export async function POST(request: Request) {
       );
     }
 
+    const crewChanges = proposal.appointments.filter(
+      (item) => Boolean(item.crewChangedFrom)
+    );
+
+    if (crewChanges.length) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "This dispatch plan includes crew reassignments. Jobber crew reassignment is not yet supported by the connected mutation layer, so the plan must be reverted to the original crews before approval.",
+          crewChangeAppointmentIds: crewChanges.map((item) => item.id),
+        },
+        { status: 409 }
+      );
+    }
+
     const reviews = proposal.appointments.filter(
       (item) => item.status === "REVIEW"
     );
