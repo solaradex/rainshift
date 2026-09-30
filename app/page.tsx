@@ -259,9 +259,16 @@ export default function Home() {
         }
 
         const response = await fetch("/api/reschedule", { method: "POST" });
-        if (!response.ok) throw new Error("Could not generate proposal");
+        const data = (await response.json().catch(() => ({}))) as Partial<ApiResponse> & {
+          error?: string;
+        };
 
-        const data = (await response.json()) as ApiResponse;
+        if (!response.ok || !data.ok || !data.proposal) {
+          throw new Error(
+            data.error || `Could not generate proposal (HTTP ${response.status})`
+          );
+        }
+
         setProposal(data.proposal);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong");
