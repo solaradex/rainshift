@@ -94,6 +94,7 @@ model Crew {
   id            String        @id @default(cuid())
   companyId     String        @map("company_id")
   name          String
+  jobberUserId  String?       @map("jobber_user_id")
   dailyCapacity Int           @default(480) @map("daily_capacity")
   company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   appointments  Appointment[]
