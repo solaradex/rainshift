@@ -207,6 +207,7 @@ function buildExistingLoad(
 function chooseReplacementDay(
   appointment: DemoAppointment,
   crewLoad: CrewLoad,
+  crewRoutes: CrewRoutes,
   replacementDays: Array<{ label: string; offset: number; date: string }>
 ): { label: string; offset: number; date: string } | null {
   const preferredIndex = replacementDays.findIndex(
@@ -271,6 +272,7 @@ export function buildRescheduleProposal(
       const replacement = chooseReplacementDay(
         appointment,
         crewLoad,
+        crewRoutes,
         replacementDays
       );
 
