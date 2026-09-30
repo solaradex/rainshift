@@ -11,6 +11,8 @@ type RoutePoint = { latitude: number; longitude: number };
 
 type CrewRoutes = Record<string, RoutePoint[]>;
 
+type CrewDriveMinutes = Record<string, number>;
+
 const AUTO_MOVE_RAIN_PROBABILITY = 85;
 const AUTO_MOVE_RAIN_INCHES = 1.75;
 const REVIEW_RAIN_PROBABILITY = 70;
@@ -18,6 +20,7 @@ const REVIEW_RAIN_INCHES = 0.75;
 
 // Leave a 60-minute operating buffer for breaks, traffic, delays, and overruns.
 const CREW_MOVE_CAPACITY_MINUTES = 420;
+const AVERAGE_ROUTE_SPEED_MPH = 25;
 
 // Approximate driving distance is deliberately local and dependency-free.
 // A paid routing API can replace this later without changing the scheduler contract.
@@ -46,6 +49,10 @@ function pointFor(appointment: DemoAppointment): RoutePoint | null {
     latitude: appointment.latitude,
     longitude: appointment.longitude,
   };
+}
+
+function milesToMinutes(miles: number) {
+  return (miles / AVERAGE_ROUTE_SPEED_MPH) * 60;
 }
 
 function insertionRouteCostMiles(
@@ -88,6 +95,7 @@ function buildExistingRoutes(
   replacementDays: Array<{ label: string; date: string }>
 ) {
   const routes: CrewRoutes = {};
+  const driveMinutes: CrewDriveMinutes = {};
 
   for (const appointment of existingAppointments) {
     const point = pointFor(appointment);
@@ -103,7 +111,15 @@ function buildExistingRoutes(
     (routes[key] ??= []).push(point);
   }
 
-  return routes;
+  for (const [key, route] of Object.entries(routes)) {
+    let miles = 0;
+    for (let index = 1; index < route.length; index += 1) {
+      miles += haversineMiles(route[index - 1], route[index]);
+    }
+    driveMinutes[key] = milesToMinutes(miles);
+  }
+
+  return { routes, driveMinutes };
 }
 
 function classifyAppointment(
@@ -208,6 +224,7 @@ function chooseReplacementDay(
   appointment: DemoAppointment,
   crewLoad: CrewLoad,
   crewRoutes: CrewRoutes,
+  crewDriveMinutes: CrewDriveMinutes,
   replacementDays: Array<{ label: string; offset: number; date: string }>
 ): { label: string; offset: number; date: string } | null {
   const preferredIndex = replacementDays.findIndex(
@@ -227,6 +244,8 @@ function chooseReplacementDay(
             appointment,
             crewRoutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? []
           ),
+        driveMinutes:
+          crewDriveMinutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? 0,
       }))
       .sort((a, b) =>
         a.routeCost - b.routeCost ||
@@ -236,7 +255,11 @@ function chooseReplacementDay(
       )
       .find(
         (candidate) =>
-          candidate.load + appointment.duration <= CREW_MOVE_CAPACITY_MINUTES
+          candidate.load +
+            candidate.driveMinutes +
+            appointment.duration +
+            milesToMinutes(candidate.routeCost) <=
+          CREW_MOVE_CAPACITY_MINUTES
       ) ?? null
   );
 }
@@ -248,7 +271,9 @@ export function buildRescheduleProposal(
 ): RescheduleProposal {
   const replacementDays = getReplacementDays(weather.eventDate);
   const crewLoad = buildExistingLoad(existingAppointments, replacementDays);
-  const crewRoutes = buildExistingRoutes(existingAppointments, replacementDays);
+  const existingRoutes = buildExistingRoutes(existingAppointments, replacementDays);
+  const crewRoutes = existingRoutes.routes;
+  const crewDriveMinutes = existingRoutes.driveMinutes;
   const proposed: ProposedAppointment[] = [];
 
   // Keep the same crew order used by the provider, then place longer jobs first
@@ -273,6 +298,7 @@ export function buildRescheduleProposal(
         appointment,
         crewLoad,
         crewRoutes,
+        crewDriveMinutes,
         replacementDays
       );
 
@@ -287,7 +313,14 @@ export function buildRescheduleProposal(
         const key = appointment.crew + ":" + replacement.date.slice(0, 10);
         crewLoad[key] = (crewLoad[key] ?? 0) + appointment.duration;
         const point = pointFor(appointment);
-        if (point) (crewRoutes[key] ??= []).push(point);
+        if (point) {
+          (crewRoutes[key] ??= []).push(point);
+          const previous = crewRoutes[key];
+          const last = previous.length > 1 ? previous[previous.length - 2] : null;
+          crewDriveMinutes[key] =
+            (crewDriveMinutes[key] ?? 0) +
+            (last ? milesToMinutes(haversineMiles(last, point)) : 0);
+        }
       }
     }
 
