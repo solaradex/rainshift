@@ -154,3 +154,38 @@ test("keeps legacy replacement behavior when coordinates are unavailable", () =>
   assert.equal(moved?.status, "MOVE");
   assert.equal(moved?.newDate?.slice(0, 10), "2026-09-30");
 });
+
+
+test("returns REVIEW when service time plus estimated drive time exceeds crew capacity", () => {
+  const affected = [
+    {
+      ...appointment("drive-heavy", 60, "Lawn Mowing", "Tue"),
+      latitude: 30.4500,
+      longitude: -81.6500,
+    },
+  ];
+
+  const future = [
+    {
+      ...appointment("route-1", 360, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+      latitude: 30.4500,
+      longitude: -81.6500,
+    },
+    {
+      ...appointment("route-2", 30, "Lawn Mowing", "Tue", "2026-09-29T13:00:00.000Z"),
+      latitude: 30.6500,
+      longitude: -81.8500,
+    },
+    {
+      ...appointment("route-3", 30, "Lawn Mowing", "Tue", "2026-09-29T14:00:00.000Z"),
+      latitude: 30.8500,
+      longitude: -82.0500,
+    },
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+  const moved = proposal.appointments.find((item) => item.id === "drive-heavy");
+
+  assert.equal(moved?.status, "REVIEW");
+  assert.match(moved?.reason ?? "", /No replacement day has enough crew capacity/);
+});
