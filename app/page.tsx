@@ -87,6 +87,71 @@ function routeBoardUtilization(day: RouteBoardDay) {
   return Math.min(100, Math.round((day.totalPlannedMinutes / 420) * 100));
 }
 
+function boardMiles(a: RouteBoardDay["stops"][number], b: RouteBoardDay["stops"][number]) {
+  if (
+    typeof a.latitude !== "number" ||
+    typeof a.longitude !== "number" ||
+    typeof b.latitude !== "number" ||
+    typeof b.longitude !== "number"
+  ) {
+    return 0;
+  }
+
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const dLat = lat2 - lat1;
+  const dLon = toRadians(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h));
+}
+
+function rebuildRouteDay(day: RouteBoardDay, stops: RouteBoardDay["stops"]): RouteBoardDay {
+  const ordered = [...stops].sort(
+    (a, b) =>
+      new Date(a.start).getTime() - new Date(b.start).getTime() ||
+      a.id.localeCompare(b.id)
+  );
+
+  const serviceMinutes = ordered.reduce((total, stop) => total + stop.duration, 0);
+  let driveMinutes = 0;
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    driveMinutes += (boardMiles(ordered[index - 1], ordered[index]) / 25) * 60;
+  }
+
+  const totalPlannedMinutes = Math.round(serviceMinutes + driveMinutes);
+
+  return {
+    ...day,
+    stops: ordered,
+    serviceMinutes,
+    driveMinutes: driveMinutes > 0 ? Math.round(driveMinutes) : undefined,
+    totalPlannedMinutes,
+    capacityMinutesRemaining: Math.max(0, Math.round(420 - totalPlannedMinutes)),
+  };
+}
+
+function moveToDateKeepTime(value: string, targetDate: string) {
+  const source = new Date(value);
+  const target = new Date(targetDate + "T00:00:00.000Z");
+
+  if (Number.isNaN(source.getTime()) || Number.isNaN(target.getTime())) return value;
+
+  target.setUTCHours(
+    source.getUTCHours(),
+    source.getUTCMinutes(),
+    source.getUTCSeconds(),
+    source.getUTCMilliseconds()
+  );
+
+  return target.toISOString();
+}
+
 function nextBusinessDate(eventDate: string) {
   const date = new Date(eventDate.slice(0, 10) + "T12:00:00Z");
   for (let i = 0; i < 7; i += 1) {
@@ -103,6 +168,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [billingLabel, setBillingLabel] = useState("ACTIVE");
   const [approvalMessage, setApprovalMessage] = useState("");
+  const [draggedAppointmentId, setDraggedAppointmentId] = useState<string | null>(null);
+  const [dispatchMessage, setDispatchMessage] = useState("");
 
   useEffect(() => {
     async function loadProposal() {
@@ -180,6 +247,93 @@ export default function Home() {
     () => proposal?.counts ?? { move: 0, keep: 0, review: 0 },
     [proposal]
   );
+
+  function moveAppointmentToRoute(appointmentId: string, targetCrew: string, targetDate: string) {
+    setApproved(false);
+    setDispatchMessage("");
+
+    setProposal((current) => {
+      if (!current) return current;
+
+      const dragged = current.appointments.find((item) => item.id === appointmentId);
+      if (!dragged || dragged.status !== "MOVE") return current;
+
+      if (dragged.crew !== targetCrew) {
+        setDispatchMessage(
+          "Crew reassignment is disabled until the Jobber crew mutation is supported."
+        );
+        return current;
+      }
+
+      const newDate = moveToDateKeepTime(
+        dragged.newDate || dragged.scheduledDate || current.weather.eventDate,
+        targetDate
+      );
+
+      const appointments = current.appointments.map((item) => {
+        if (item.id !== appointmentId) return item;
+
+        return {
+          ...item,
+          newDate,
+          newDay: new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: "UTC",
+          }).format(new Date(newDate)),
+          routeMilesAdded: undefined,
+          driveMinutesAdded: undefined,
+          crewMinutesPlanned: undefined,
+          capacityMinutesRemaining: undefined,
+          routePosition: undefined,
+        };
+      });
+
+      const sourceStop = current.routeBoard
+        .flatMap((boardDay) => boardDay.stops)
+        .find((stop) => stop.id === appointmentId);
+
+      const routeBoard = current.routeBoard.map((day) => {
+        const withoutDragged = day.stops.filter((stop) => stop.id !== appointmentId);
+
+        if (day.crew === targetCrew && day.date === targetDate && sourceStop) {
+          return rebuildRouteDay(day, [
+            ...withoutDragged,
+            {
+              ...sourceStop,
+              crew: targetCrew,
+              start: newDate,
+              movedFrom: dragged.scheduledDate,
+              status: "MOVE",
+            },
+          ]);
+        }
+
+        return rebuildRouteDay(day, withoutDragged);
+      });
+
+      setDispatchMessage(
+        "Moved " +
+          dragged.customer +
+          " to " +
+          targetCrew +
+          " on " +
+          new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          }).format(new Date(newDate)) +
+          ". Route totals recalculated."
+      );
+
+      return {
+        ...current,
+        appointments,
+        routeBoard,
+      };
+    });
+
+    setDraggedAppointmentId(null);
+  }
 
   function cycleStatus(id: string) {
     setApproved(false);
