@@ -8,6 +8,8 @@ export type DemoAppointment = {
   service: string;
   duration: number;
   distance: number;
+  latitude?: number | null;
+  longitude?: number | null;
   preferredDay: string;
   scheduledDate?: string;
 };

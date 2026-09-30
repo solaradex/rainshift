@@ -10,7 +10,7 @@ export function createSupabaseSchedulingProvider(
     async getAppointments(start, end) {
       const { data: records, error: appointmentError } = await supabase
         .from("appointments")
-        .select("id,customer_id,crew_id,service,duration_minutes,scheduled_date,status")
+        .select("id,customer_id,crew_id,service,duration_minutes,scheduled_date,status,latitude,longitude")
         .eq("company_id", companyId)
         .gte("scheduled_date", start)
         .lt("scheduled_date", end)
@@ -60,6 +60,8 @@ export function createSupabaseSchedulingProvider(
           service: record.service,
           duration: record.duration_minutes,
           distance: 0,
+          latitude: record.latitude,
+          longitude: record.longitude,
           preferredDay: customer.preferred_days[0] ?? "Thu",
           scheduledDate: record.scheduled_date,
         } satisfies DemoAppointment;
