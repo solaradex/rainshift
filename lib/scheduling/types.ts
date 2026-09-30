@@ -31,6 +31,7 @@ export type ProposedAppointment = DemoAppointment & {
   crewMinutesPlanned?: number;
   capacityMinutesRemaining?: number;
   routePosition?: number;
+  crewChangedFrom?: string;
 };
 
 export type RouteBoardStop = {
@@ -43,6 +44,7 @@ export type RouteBoardStop = {
   duration: number;
   status: "SCHEDULED" | "MOVE";
   movedFrom?: string;
+  crewChangedFrom?: string;
   latitude?: number | null;
   longitude?: number | null;
 };
