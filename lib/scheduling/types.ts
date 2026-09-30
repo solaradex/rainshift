@@ -26,6 +26,11 @@ export type ProposedAppointment = DemoAppointment & {
   reason: string;
   newDay?: string;
   newDate?: string;
+  routeMilesAdded?: number;
+  driveMinutesAdded?: number;
+  crewMinutesPlanned?: number;
+  capacityMinutesRemaining?: number;
+  routePosition?: number;
 };
 
 export type RescheduleProposal = {

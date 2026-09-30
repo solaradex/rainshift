@@ -138,6 +138,19 @@ function insertionRouteCostMiles(
   return 0;
 }
 
+function routePosition(
+  appointment: DemoAppointment,
+  route: RouteStop[]
+) {
+  const candidate = routeStopFor(appointment);
+  if (!candidate) return null;
+
+  const nextRoute = [...route, candidate];
+  sortRoute(nextRoute);
+  const index = nextRoute.findIndex((stop) => stop.id === appointment.id);
+  return index < 0 ? null : index + 1;
+}
+
 function hasCompatibleTimeWindow(
   appointment: DemoAppointment,
   route: RouteStop[]
@@ -319,7 +332,15 @@ function chooseReplacementDay(
   crewRoutes: CrewRoutes,
   crewDriveMinutes: CrewDriveMinutes,
   replacementDays: Array<{ label: string; offset: number; date: string }>
-): { label: string; offset: number; date: string } | null {
+): {
+  label: string;
+  offset: number;
+  date: string;
+  routeCost: number;
+  driveMinutes: number;
+  load: number;
+  timeFeasible: boolean;
+} | null {
   const preferredIndex = replacementDays.findIndex(
     (day) => day.label === appointment.preferredDay
   );
@@ -409,6 +430,25 @@ export function buildRescheduleProposal(
         next.newDate = replacementDateWithTime(appointment, replacement.date);
 
         const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+        const plannedMinutes =
+          replacement.load +
+          replacement.driveMinutes +
+          appointment.duration +
+          milesToMinutes(replacement.routeCost);
+
+        next.routeMilesAdded = Number(replacement.routeCost.toFixed(1));
+        next.driveMinutesAdded = Math.round(milesToMinutes(replacement.routeCost));
+        next.crewMinutesPlanned = Math.round(plannedMinutes);
+        next.capacityMinutesRemaining = Math.max(
+          0,
+          Math.round(CREW_MOVE_CAPACITY_MINUTES - plannedMinutes)
+        );
+        next.routePosition =
+          routePosition(
+            appointment,
+            crewRoutes[key] ?? []
+          ) ?? undefined;
+
         crewLoad[key] = (crewLoad[key] ?? 0) + appointment.duration;
         const stop = routeStopFor(appointment);
         if (stop) {
