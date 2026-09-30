@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ProposedAppointment, RescheduleProposal, ScheduleStatus } from "@/lib/scheduling/types";
+import type { ProposedAppointment, RescheduleProposal, RouteBoardDay, ScheduleStatus } from "@/lib/scheduling/types";
 import { createClient } from "@/lib/supabase/client";
 import JobberConnectCard from "@/components/jobber-connect-card";
 
@@ -72,6 +72,19 @@ function routeSummary(appointment: ProposedAppointment) {
   }
 
   return details.join(" · ");
+}
+
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function routeBoardUtilization(day: RouteBoardDay) {
+  return Math.min(100, Math.round((day.totalPlannedMinutes / 420) * 100));
 }
 
 function nextBusinessDate(eventDate: string) {
@@ -400,6 +413,184 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </section>
+
+          <section
+            style={{
+              background: "white",
+              border: "1px solid #dfe6ee",
+              borderRadius: 18,
+              padding: 22,
+              marginBottom: 22,
+            }}
+          >
+            <div style={{ marginBottom: 18 }}>
+              <h2 style={{ margin: 0, fontSize: 20 }}>Proposed route board</h2>
+              <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
+                Replacement routes are ordered by service start time. Moved jobs are shown beside work
+                that was already scheduled for the crew.
+              </p>
+            </div>
+
+            {proposal.routeBoard.length === 0 ? (
+              <div
+                style={{
+                  border: "1px dashed #cfd8e3",
+                  borderRadius: 14,
+                  padding: 20,
+                  color: "#6a7787",
+                }}
+              >
+                No replacement-day route stops are available yet.
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 16 }}>
+                {proposal.routeBoard.map((day) => (
+                  <div
+                    key={day.crew + ":" + day.date}
+                    style={{
+                      border: "1px solid #e1e8f0",
+                      borderRadius: 16,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: "16px 18px",
+                        background: "#f8fafc",
+                        borderBottom: "1px solid #e7edf4",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          gap: 16,
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 12, color: "#6b7888", fontWeight: 800, letterSpacing: 1 }}>
+                            {day.label.toUpperCase()} · {day.date}
+                          </div>
+                          <div style={{ fontSize: 19, fontWeight: 800, marginTop: 4 }}>
+                            {day.crew}
+                          </div>
+                        </div>
+
+                        <div style={{ minWidth: 260 }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              fontSize: 12,
+                              color: "#687789",
+                              marginBottom: 7,
+                            }}
+                          >
+                            <span>
+                              {day.totalPlannedMinutes} min planned
+                              {typeof day.driveMinutes === "number" ? " · " + day.driveMinutes + " min drive" : ""}
+                            </span>
+                            <strong>{routeBoardUtilization(day)}%</strong>
+                          </div>
+                          <div
+                            style={{
+                              height: 8,
+                              borderRadius: 999,
+                              background: "#e8edf3",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: routeBoardUtilization(day) + "%",
+                                height: "100%",
+                                background: "#3167d8",
+                                borderRadius: 999,
+                              }}
+                            />
+                          </div>
+                          <div
+                            style={{
+                              marginTop: 6,
+                              fontSize: 12,
+                              color: "#5c6b7b",
+                              textAlign: "right",
+                            }}
+                          >
+                            {day.capacityMinutesRemaining} min capacity buffer
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid" }}>
+                      {day.stops.map((stop, index) => (
+                        <div
+                          key={stop.id}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "44px 90px 1fr auto",
+                            gap: 12,
+                            alignItems: "center",
+                            padding: "14px 18px",
+                            borderTop: index === 0 ? 0 : "1px solid #edf1f5",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 999,
+                              display: "grid",
+                              placeItems: "center",
+                              background: stop.status === "MOVE" ? "#ffe8e8" : "#e9f0ff",
+                              color: stop.status === "MOVE" ? "#a52a2a" : "#2c59a3",
+                              fontWeight: 900,
+                              fontSize: 12,
+                            }}
+                          >
+                            {index + 1}
+                          </div>
+
+                          <div>
+                            <div style={{ fontWeight: 800 }}>{formatTime(stop.start)}</div>
+                            <div style={{ fontSize: 11, color: "#7a8795" }}>{stop.duration} min</div>
+                          </div>
+
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 750 }}>{stop.customer}</div>
+                            <div style={{ fontSize: 12, color: "#768493" }}>
+                              {stop.service} · {stop.address}
+                            </div>
+                            {stop.status === "MOVE" && (
+                              <div style={{ marginTop: 5, color: "#a52a2a", fontSize: 11, fontWeight: 800 }}>
+                                MOVED IN · originally {formatDateTime(stop.movedFrom)}
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              padding: "6px 9px",
+                              borderRadius: 999,
+                              background: stop.status === "MOVE" ? "#ffe8e8" : "#eef3f8",
+                              color: stop.status === "MOVE" ? "#a52a2a" : "#526170",
+                              fontSize: 11,
+                              fontWeight: 900,
+                            }}
+                          >
+                            {stop.status === "MOVE" ? "MOVED" : "SCHEDULED"}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           <section

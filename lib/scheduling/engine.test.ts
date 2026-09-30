@@ -255,3 +255,72 @@ test("moves around a fixed time-window conflict instead of double-booking a crew
   assert.equal(moved?.status, "MOVE");
   assert.equal(moved?.newDate, "2026-09-30T10:00:00.000Z");
 });
+
+
+test("builds a chronological replacement route board with moved jobs", () => {
+  const affected = [
+    {
+      ...appointment(
+        "moved-board",
+        60,
+        "Lawn Mowing",
+        "Tue",
+        "2026-09-28T10:00:00.000Z"
+      ),
+      latitude: 30.45,
+      longitude: -81.65,
+    },
+  ];
+
+  const future = [
+    {
+      ...appointment(
+        "existing-board",
+        90,
+        "Lawn Mowing",
+        "Tue",
+        "2026-09-29T11:30:00.000Z"
+      ),
+      latitude: 30.46,
+      longitude: -81.66,
+    },
+    {
+      ...appointment(
+        "wednesday-route",
+        60,
+        "Lawn Mowing",
+        "Wed",
+        "2026-09-30T11:30:00.000Z"
+      ),
+      latitude: 31.20,
+      longitude: -82.40,
+    },
+    {
+      ...appointment(
+        "thursday-route",
+        60,
+        "Lawn Mowing",
+        "Thu",
+        "2026-10-01T11:30:00.000Z"
+      ),
+      latitude: 31.40,
+      longitude: -82.60,
+    },
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+  const board = proposal.routeBoard.find(
+    (day) => day.date === "2026-09-29" && day.crew === "Crew A"
+  );
+
+  assert.ok(board);
+  assert.deepEqual(
+    board?.stops.map((stop) => [stop.id, stop.status]),
+    [
+      ["moved-board", "MOVE"],
+      ["existing-board", "SCHEDULED"],
+    ]
+  );
+  assert.equal(board?.serviceMinutes, 150);
+  assert.ok((board?.capacityMinutesRemaining ?? 0) <= 270);
+});
