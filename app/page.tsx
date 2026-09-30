@@ -87,6 +87,101 @@ function routeBoardUtilization(day: RouteBoardDay) {
   return Math.min(100, Math.round((day.totalPlannedMinutes / 420) * 100));
 }
 
+function boardMiles(a: RouteBoardDay["stops"][number], b: RouteBoardDay["stops"][number]) {
+  if (
+    typeof a.latitude !== "number" ||
+    typeof a.longitude !== "number" ||
+    typeof b.latitude !== "number" ||
+    typeof b.longitude !== "number"
+  ) {
+    return 0;
+  }
+
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const earthRadiusMiles = 3958.8;
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const dLat = lat2 - lat1;
+  const dLon = toRadians(b.longitude - a.longitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+  return 2 * earthRadiusMiles * Math.asin(Math.sqrt(h));
+}
+
+function rebuildRouteDay(day: RouteBoardDay, stops: RouteBoardDay["stops"]): RouteBoardDay {
+  const ordered = [...stops].sort(
+    (a, b) =>
+      new Date(a.start).getTime() - new Date(b.start).getTime() ||
+      a.id.localeCompare(b.id)
+  );
+
+  const serviceMinutes = ordered.reduce((total, stop) => total + stop.duration, 0);
+  let driveMinutes = 0;
+
+  for (let index = 1; index < ordered.length; index += 1) {
+    driveMinutes += (boardMiles(ordered[index - 1], ordered[index]) / 25) * 60;
+  }
+
+  const totalPlannedMinutes = Math.round(serviceMinutes + driveMinutes);
+
+  return {
+    ...day,
+    stops: ordered,
+    serviceMinutes,
+    driveMinutes: driveMinutes > 0 ? Math.round(driveMinutes) : undefined,
+    totalPlannedMinutes,
+    capacityMinutesRemaining: Math.max(0, Math.round(420 - totalPlannedMinutes)),
+  };
+}
+
+function insertionMilesFor(
+  stop: RouteBoardDay["stops"][number],
+  route: RouteBoardDay["stops"]
+) {
+  const neighbors = [...route]
+    .filter((candidate) => candidate.id !== stop.id)
+    .sort(
+      (a, b) =>
+        new Date(a.start).getTime() - new Date(b.start).getTime() ||
+        a.id.localeCompare(b.id)
+    );
+
+  if (!neighbors.length) return 0;
+
+  const index = neighbors.findIndex(
+    (candidate) => new Date(candidate.start).getTime() > new Date(stop.start).getTime()
+  );
+  const insertIndex = index < 0 ? neighbors.length : index;
+  const before = neighbors[insertIndex - 1];
+  const after = neighbors[insertIndex];
+
+  if (!before && after) return boardMiles(stop, after);
+  if (before && !after) return boardMiles(before, stop);
+  if (before && after) {
+    return boardMiles(before, stop) + boardMiles(stop, after) - boardMiles(before, after);
+  }
+
+  return 0;
+}
+
+function moveToDateKeepTime(value: string, targetDate: string) {
+  const source = new Date(value);
+  const target = new Date(targetDate + "T00:00:00.000Z");
+
+  if (Number.isNaN(source.getTime()) || Number.isNaN(target.getTime())) return value;
+
+  target.setUTCHours(
+    source.getUTCHours(),
+    source.getUTCMinutes(),
+    source.getUTCSeconds(),
+    source.getUTCMilliseconds()
+  );
+
+  return target.toISOString();
+}
+
 function nextBusinessDate(eventDate: string) {
   const date = new Date(eventDate.slice(0, 10) + "T12:00:00Z");
   for (let i = 0; i < 7; i += 1) {
@@ -103,6 +198,8 @@ export default function Home() {
   const [error, setError] = useState("");
   const [billingLabel, setBillingLabel] = useState("ACTIVE");
   const [approvalMessage, setApprovalMessage] = useState("");
+  const [draggedAppointmentId, setDraggedAppointmentId] = useState<string | null>(null);
+  const [dispatchMessage, setDispatchMessage] = useState("");
 
   useEffect(() => {
     async function loadProposal() {
@@ -180,6 +277,115 @@ export default function Home() {
     () => proposal?.counts ?? { move: 0, keep: 0, review: 0 },
     [proposal]
   );
+
+  const routeOverCapacity = useMemo(
+    () => proposal?.routeBoard.some((day) => day.totalPlannedMinutes > 420) ?? false,
+    [proposal]
+  );
+
+  function moveAppointmentToRoute(appointmentId: string, targetCrew: string, targetDate: string) {
+    setApproved(false);
+    setDispatchMessage("");
+
+    setProposal((current) => {
+      if (!current) return current;
+
+      const dragged = current.appointments.find((item) => item.id === appointmentId);
+      if (!dragged || dragged.status !== "MOVE") return current;
+
+      if (dragged.crew !== targetCrew) {
+        setDispatchMessage(
+          "Crew reassignment is disabled until the Jobber crew mutation is supported."
+        );
+        return current;
+      }
+
+      const newDate = moveToDateKeepTime(
+        dragged.newDate || dragged.scheduledDate || current.weather.eventDate,
+        targetDate
+      );
+
+      const sourceStop = current.routeBoard
+        .flatMap((boardDay) => boardDay.stops)
+        .find((stop) => stop.id === appointmentId);
+
+      const routeBoard = current.routeBoard.map((day) => {
+        const withoutDragged = day.stops.filter((stop) => stop.id !== appointmentId);
+
+        if (day.crew === targetCrew && day.date === targetDate && sourceStop) {
+          return rebuildRouteDay(day, [
+            ...withoutDragged,
+            {
+              ...sourceStop,
+              crew: targetCrew,
+              start: newDate,
+              movedFrom: dragged.scheduledDate,
+              status: "MOVE",
+            },
+          ]);
+        }
+
+        return rebuildRouteDay(day, withoutDragged);
+      });
+
+      const targetBoard = routeBoard.find(
+        (day) => day.crew === targetCrew && day.date === targetDate
+      );
+      const updatedRouteStop = targetBoard?.stops.find(
+        (stop) => stop.id === appointmentId
+      );
+      const addedMiles = updatedRouteStop && targetBoard
+        ? insertionMilesFor(updatedRouteStop, targetBoard.stops)
+        : 0;
+      const driveMinutesAdded = Math.round((addedMiles / 25) * 60);
+      const routePosition = updatedRouteStop && targetBoard
+        ? targetBoard.stops.findIndex((stop) => stop.id === appointmentId) + 1
+        : undefined;
+      const appointments = current.appointments.map((item) => {
+        if (item.id !== appointmentId) return item;
+
+        return {
+          ...item,
+          newDate,
+          newDay: new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: "UTC",
+          }).format(new Date(newDate)),
+          routeMilesAdded: Number(addedMiles.toFixed(1)),
+          driveMinutesAdded,
+          crewMinutesPlanned: targetBoard?.totalPlannedMinutes,
+          capacityMinutesRemaining: targetBoard?.capacityMinutesRemaining,
+          routePosition,
+        };
+      });
+
+      const overCapacity = targetBoard && targetBoard.totalPlannedMinutes > 420;
+      setDispatchMessage(
+        "Moved " +
+          dragged.customer +
+          " to " +
+          targetCrew +
+          " on " +
+          new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          }).format(new Date(newDate)) +
+          ". " +
+          (overCapacity
+            ? "That route is over the planning budget; approval is blocked until adjusted."
+            : "Route totals recalculated.")
+      );
+
+      return {
+        ...current,
+        appointments,
+        routeBoard,
+      };
+    });
+
+    setDraggedAppointmentId(null);
+  }
 
   function cycleStatus(id: string) {
     setApproved(false);
@@ -415,6 +621,23 @@ export default function Home() {
             </div>
           </section>
 
+          {dispatchMessage && (
+            <section
+              style={{
+                background: "#eef4ff",
+                border: "1px solid #cfddf5",
+                borderRadius: 14,
+                padding: "12px 15px",
+                marginBottom: 18,
+                color: "#31598d",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {dispatchMessage}
+            </section>
+          )}
+
           <section
             style={{
               background: "white",
@@ -427,8 +650,8 @@ export default function Home() {
             <div style={{ marginBottom: 18 }}>
               <h2 style={{ margin: 0, fontSize: 20 }}>Proposed route board</h2>
               <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
-                Replacement routes are ordered by service start time. Moved jobs are shown beside work
-                that was already scheduled for the crew.
+                Replacement routes are ordered by service start time. Drag a MOVED job to another
+                day for the same crew to rebuild the route totals instantly.
               </p>
             </div>
 
@@ -448,10 +671,22 @@ export default function Home() {
                 {proposal.routeBoard.map((day) => (
                   <div
                     key={day.crew + ":" + day.date}
+                    onDragOver={(event) => {
+                      if (draggedAppointmentId) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedAppointmentId) {
+                        moveAppointmentToRoute(draggedAppointmentId, day.crew, day.date);
+                      }
+                    }}
                     style={{
-                      border: "1px solid #e1e8f0",
+                      border: draggedAppointmentId
+                        ? "1px dashed #7fa2df"
+                        : "1px solid #e1e8f0",
                       borderRadius: 16,
                       overflow: "hidden",
+                      background: draggedAppointmentId ? "#fbfdff" : "white",
                     }}
                   >
                     <div
@@ -530,6 +765,14 @@ export default function Home() {
                       {day.stops.map((stop, index) => (
                         <div
                           key={stop.id}
+                          draggable={stop.status === "MOVE"}
+                          onDragStart={(event) => {
+                            if (stop.status !== "MOVE") return;
+                            setDraggedAppointmentId(stop.id);
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", stop.id);
+                          }}
+                          onDragEnd={() => setDraggedAppointmentId(null)}
                           style={{
                             display: "grid",
                             gridTemplateColumns: "44px 90px 1fr auto",
@@ -537,6 +780,8 @@ export default function Home() {
                             alignItems: "center",
                             padding: "14px 18px",
                             borderTop: index === 0 ? 0 : "1px solid #edf1f5",
+                            cursor: stop.status === "MOVE" ? "grab" : "default",
+                            opacity: draggedAppointmentId === stop.id ? 0.55 : 1,
                           }}
                         >
                           <div
@@ -735,14 +980,18 @@ export default function Home() {
               </div>
               <button
                 onClick={approve}
-                disabled={approved || counts.review > 0 || counts.move === 0}
+                disabled={approved || counts.review > 0 || counts.move === 0 || routeOverCapacity}
                 style={{
                   border: 0,
                   borderRadius: 12,
                   padding: "13px 20px",
                   fontWeight: 800,
-                  cursor: approved || counts.review > 0 ? "default" : "pointer",
-                  background: approved ? "#9bbba8" : counts.review > 0 ? "#aeb8c5" : "#3167d8",
+                  cursor: approved || counts.review > 0 || routeOverCapacity ? "default" : "pointer",
+                  background: approved
+                    ? "#9bbba8"
+                    : counts.review > 0 || routeOverCapacity
+                      ? "#aeb8c5"
+                      : "#3167d8",
                   color: "white",
                 }}
               >
@@ -750,7 +999,9 @@ export default function Home() {
                   ? "Approved ✓"
                   : counts.review > 0
                     ? "Resolve Reviews First"
-                    : counts.move > 0
+                    : routeOverCapacity
+                      ? "Adjust Route Capacity"
+                      : counts.move > 0
                       ? `Approve ${counts.move} Jobber change${counts.move === 1 ? "" : "s"}`
                       : "No Changes to Approve"}
               </button>
