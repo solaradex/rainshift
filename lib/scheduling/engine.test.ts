@@ -9,7 +9,9 @@ function appointment(
   duration: number,
   service = "Lawn Mowing",
   preferredDay = "Tue",
-  scheduledDate = eventDate
+  scheduledDate = eventDate,
+  latitude?: number,
+  longitude?: number
 ) {
   return {
     id,
