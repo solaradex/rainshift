@@ -284,6 +284,28 @@ test("builds a chronological replacement route board with moved jobs", () => {
       latitude: 30.46,
       longitude: -81.66,
     },
+    {
+      ...appointment(
+        "wednesday-route",
+        60,
+        "Lawn Mowing",
+        "Wed",
+        "2026-09-30T11:30:00.000Z"
+      ),
+      latitude: 31.20,
+      longitude: -82.40,
+    },
+    {
+      ...appointment(
+        "thursday-route",
+        60,
+        "Lawn Mowing",
+        "Thu",
+        "2026-10-01T11:30:00.000Z"
+      ),
+      latitude: 31.40,
+      longitude: -82.60,
+    },
   ];
 
   const proposal = buildRescheduleProposal(affected, highRain, future);
