@@ -167,17 +167,17 @@ test("returns REVIEW when service time plus estimated drive time exceeds crew ca
 
   const future = [
     {
-      ...appointment("route-1", 360, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
+      ...appointment("route-1", 360, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
       latitude: 30.5000,
       longitude: -81.7000,
     },
     {
-      ...appointment("route-2", 360, "Lawn Mowing", "Tue", "2026-10-01T13:00:00.000Z"),
+      ...appointment("route-2", 360, "Lawn Mowing", "Tue", "2026-09-30T13:00:00.000Z"),
       latitude: 30.6500,
       longitude: -81.8500,
     },
     {
-      ...appointment("route-3", 360, "Lawn Mowing", "Tue", "2026-10-02T14:00:00.000Z"),
+      ...appointment("route-3", 360, "Lawn Mowing", "Tue", "2026-10-01T14:00:00.000Z"),
       latitude: 30.8500,
       longitude: -82.0500,
     },
