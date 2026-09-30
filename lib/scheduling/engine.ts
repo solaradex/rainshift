@@ -348,7 +348,7 @@ function buildExistingRoutes(
     );
     if (!replacement) continue;
 
-    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const key = (appointment.crewId ?? appointment.crew) + ":" + replacement.date.slice(0, 10);
     (routes[key] ??= []).push(stop);
   }
 
