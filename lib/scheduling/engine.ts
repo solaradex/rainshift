@@ -9,7 +9,14 @@ type CrewLoad = Record<string, number>;
 
 type RoutePoint = { latitude: number; longitude: number };
 
-type CrewRoutes = Record<string, RoutePoint[]>;
+type RouteStop = {
+  id: string;
+  point: RoutePoint;
+  startMinutes: number;
+  duration: number;
+};
+
+type CrewRoutes = Record<string, RouteStop[]>;
 
 type CrewDriveMinutes = Record<string, number>;
 
@@ -55,13 +62,55 @@ function milesToMinutes(miles: number) {
   return (miles / AVERAGE_ROUTE_SPEED_MPH) * 60;
 }
 
+function startMinutesFor(appointment: DemoAppointment) {
+  if (!appointment.scheduledDate) return null;
+  const date = new Date(appointment.scheduledDate);
+  if (Number.isNaN(date.getTime())) return null;
+  return (
+    date.getUTCHours() * 60 +
+    date.getUTCMinutes() +
+    date.getUTCSeconds() / 60
+  );
+}
+
+function routeStopFor(appointment: DemoAppointment): RouteStop | null {
+  const point = pointFor(appointment);
+  const startMinutes = startMinutesFor(appointment);
+
+  if (!point || startMinutes === null) return null;
+
+  return {
+    id: appointment.id,
+    point,
+    startMinutes,
+    duration: appointment.duration,
+  };
+}
+
+function sortRoute(route: RouteStop[]) {
+  route.sort(
+    (a, b) => a.startMinutes - b.startMinutes || a.id.localeCompare(b.id)
+  );
+}
+
+function routeMiles(route: RouteStop[]) {
+  let miles = 0;
+
+  for (let index = 1; index < route.length; index += 1) {
+    miles += haversineMiles(route[index - 1].point, route[index].point);
+  }
+
+  return miles;
+}
+
 function insertionRouteCostMiles(
   appointment: DemoAppointment,
-  route: RoutePoint[]
+  route: RouteStop[]
 ) {
   const point = pointFor(appointment);
+  const startMinutes = startMinutesFor(appointment);
 
-  if (!point) {
+  if (!point || startMinutes === null) {
     return appointment.distance;
   }
 
@@ -69,25 +118,72 @@ function insertionRouteCostMiles(
     return 0;
   }
 
-  let best = Number.POSITIVE_INFINITY;
+  const insertionIndex = route.findIndex(
+    (stop) => stop.startMinutes > startMinutes
+  );
+  const index = insertionIndex < 0 ? route.length : insertionIndex;
+  const before = route[index - 1];
+  const after = route[index];
 
-  for (let index = 0; index <= route.length; index += 1) {
-    const before = route[index - 1];
-    const after = route[index];
-
-    const cost =
-      before && after
-        ? haversineMiles(before, point) +
-          haversineMiles(point, after) -
-          haversineMiles(before, after)
-        : before
-          ? haversineMiles(before, point)
-          : haversineMiles(point, after);
-
-    best = Math.min(best, cost);
+  if (!before && after) return haversineMiles(point, after.point);
+  if (before && !after) return haversineMiles(before.point, point);
+  if (before && after) {
+    return (
+      haversineMiles(before.point, point) +
+      haversineMiles(point, after.point) -
+      haversineMiles(before.point, after.point)
+    );
   }
 
-  return Number.isFinite(best) ? best : appointment.distance;
+  return 0;
+}
+
+function hasCompatibleTimeWindow(
+  appointment: DemoAppointment,
+  route: RouteStop[]
+) {
+  const candidate = routeStopFor(appointment);
+  if (!candidate) return true;
+
+  const nextRoute = [...route, candidate];
+  sortRoute(nextRoute);
+
+  for (let index = 1; index < nextRoute.length; index += 1) {
+    const before = nextRoute[index - 1];
+    const after = nextRoute[index];
+    const travelMinutes = milesToMinutes(
+      haversineMiles(before.point, after.point)
+    );
+
+    if (after.startMinutes < before.startMinutes + before.duration + travelMinutes) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function replacementDateWithTime(
+  appointment: DemoAppointment,
+  replacementDate: string
+) {
+  if (!appointment.scheduledDate) return replacementDate;
+
+  const source = new Date(appointment.scheduledDate);
+  const target = new Date(replacementDate);
+
+  if (Number.isNaN(source.getTime()) || Number.isNaN(target.getTime())) {
+    return replacementDate;
+  }
+
+  target.setUTCHours(
+    source.getUTCHours(),
+    source.getUTCMinutes(),
+    source.getUTCSeconds(),
+    source.getUTCMilliseconds()
+  );
+
+  return target.toISOString();
 }
 
 function buildExistingRoutes(
@@ -98,8 +194,8 @@ function buildExistingRoutes(
   const driveMinutes: CrewDriveMinutes = {};
 
   for (const appointment of existingAppointments) {
-    const point = pointFor(appointment);
-    if (!point || !appointment.scheduledDate) continue;
+    const stop = routeStopFor(appointment);
+    if (!stop || !appointment.scheduledDate) continue;
 
     const scheduled = dateKey(appointment.scheduledDate);
     const replacement = replacementDays.find(
@@ -108,15 +204,12 @@ function buildExistingRoutes(
     if (!replacement) continue;
 
     const key = appointment.crew + ":" + replacement.date.slice(0, 10);
-    (routes[key] ??= []).push(point);
+    (routes[key] ??= []).push(stop);
   }
 
   for (const [key, route] of Object.entries(routes)) {
-    let miles = 0;
-    for (let index = 1; index < route.length; index += 1) {
-      miles += haversineMiles(route[index - 1], route[index]);
-    }
-    driveMinutes[key] = milesToMinutes(miles);
+    sortRoute(route);
+    driveMinutes[key] = milesToMinutes(routeMiles(route));
   }
 
   return { routes, driveMinutes };
@@ -246,6 +339,10 @@ function chooseReplacementDay(
           ),
         driveMinutes:
           crewDriveMinutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? 0,
+        timeFeasible: hasCompatibleTimeWindow(
+          appointment,
+          crewRoutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? []
+        ),
       }))
       .sort((a, b) =>
         a.routeCost - b.routeCost ||
@@ -255,6 +352,7 @@ function chooseReplacementDay(
       )
       .find(
         (candidate) =>
+          candidate.timeFeasible &&
           candidate.load +
             candidate.driveMinutes +
             appointment.duration +
@@ -305,21 +403,20 @@ export function buildRescheduleProposal(
       if (!replacement) {
         next.status = "REVIEW";
         next.reason =
-          "No replacement day has enough crew capacity without overloading the route";
+          "No replacement day has enough crew capacity or a compatible route time window";
       } else {
         next.newDay = replacement.label;
-        next.newDate = replacement.date;
+        next.newDate = replacementDateWithTime(appointment, replacement.date);
 
         const key = appointment.crew + ":" + replacement.date.slice(0, 10);
         crewLoad[key] = (crewLoad[key] ?? 0) + appointment.duration;
-        const point = pointFor(appointment);
-        if (point) {
-          (crewRoutes[key] ??= []).push(point);
-          const previous = crewRoutes[key];
-          const last = previous.length > 1 ? previous[previous.length - 2] : null;
-          crewDriveMinutes[key] =
-            (crewDriveMinutes[key] ?? 0) +
-            (last ? milesToMinutes(haversineMiles(last, point)) : 0);
+        const stop = routeStopFor(appointment);
+        if (stop) {
+          (crewRoutes[key] ??= []).push({
+            ...stop,
+          });
+          sortRoute(crewRoutes[key]);
+          crewDriveMinutes[key] = milesToMinutes(routeMiles(crewRoutes[key]));
         }
       }
     }
