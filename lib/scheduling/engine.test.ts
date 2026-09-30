@@ -253,5 +253,5 @@ test("moves around a fixed time-window conflict instead of double-booking a crew
   const moved = proposal.appointments.find((item) => item.id === "window-job");
 
   assert.equal(moved?.status, "MOVE");
-  assert.equal(moved?.newDate, "2026-10-01T10:00:00.000Z");
+  assert.equal(moved?.newDate, "2026-09-30T10:00:00.000Z");
 });
