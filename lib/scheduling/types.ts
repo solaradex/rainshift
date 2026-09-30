@@ -33,10 +33,36 @@ export type ProposedAppointment = DemoAppointment & {
   routePosition?: number;
 };
 
+export type RouteBoardStop = {
+  id: string;
+  customer: string;
+  address: string;
+  service: string;
+  crew: string;
+  start: string;
+  duration: number;
+  status: "SCHEDULED" | "MOVE";
+  movedFrom?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+export type RouteBoardDay = {
+  date: string;
+  label: string;
+  crew: string;
+  stops: RouteBoardStop[];
+  serviceMinutes: number;
+  driveMinutes?: number;
+  totalPlannedMinutes: number;
+  capacityMinutesRemaining: number;
+};
+
 export type RescheduleProposal = {
   companyId?: string;
   weather: WeatherEvent;
   appointments: ProposedAppointment[];
+  routeBoard: RouteBoardDay[];
   counts: {
     move: number;
     keep: number;
