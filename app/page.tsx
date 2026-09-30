@@ -650,8 +650,8 @@ export default function Home() {
             <div style={{ marginBottom: 18 }}>
               <h2 style={{ margin: 0, fontSize: 20 }}>Proposed route board</h2>
               <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
-                Replacement routes are ordered by service start time. Moved jobs are shown beside work
-                that was already scheduled for the crew.
+                Replacement routes are ordered by service start time. Drag a MOVED job to another
+                day for the same crew to rebuild the route totals instantly.
               </p>
             </div>
 
@@ -765,6 +765,14 @@ export default function Home() {
                       {day.stops.map((stop, index) => (
                         <div
                           key={stop.id}
+                          draggable={stop.status === "MOVE"}
+                          onDragStart={(event) => {
+                            if (stop.status !== "MOVE") return;
+                            setDraggedAppointmentId(stop.id);
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", stop.id);
+                          }}
+                          onDragEnd={() => setDraggedAppointmentId(null)}
                           style={{
                             display: "grid",
                             gridTemplateColumns: "44px 90px 1fr auto",
@@ -772,6 +780,8 @@ export default function Home() {
                             alignItems: "center",
                             padding: "14px 18px",
                             borderTop: index === 0 ? 0 : "1px solid #edf1f5",
+                            cursor: stop.status === "MOVE" ? "grab" : "default",
+                            opacity: draggedAppointmentId === stop.id ? 0.55 : 1,
                           }}
                         >
                           <div
@@ -976,7 +986,7 @@ export default function Home() {
                   borderRadius: 12,
                   padding: "13px 20px",
                   fontWeight: 800,
-                  cursor: approved || counts.review > 0 ? "default" : "pointer",
+                  cursor: approved || counts.review > 0 || routeOverCapacity ? "default" : "pointer",
                   background: approved
                     ? "#9bbba8"
                     : counts.review > 0 || routeOverCapacity
