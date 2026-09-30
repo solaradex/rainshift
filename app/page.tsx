@@ -52,7 +52,7 @@ function routeSummary(appointment: ProposedAppointment) {
   const details: string[] = [];
 
   if (typeof appointment.routeMilesAdded === "number") {
-    details.push(`+${appointment.routeMilesAdded.toFixed(1)} mi route impact`);
+    details.push(`Estimated +${appointment.routeMilesAdded.toFixed(1)} mi route impact`);
   }
 
   if (typeof appointment.driveMinutesAdded === "number") {
@@ -60,7 +60,7 @@ function routeSummary(appointment: ProposedAppointment) {
   }
 
   if (typeof appointment.crewMinutesPlanned === "number") {
-    details.push(`${appointment.crewMinutesPlanned}/420 min planned`);
+    details.push(`${appointment.crewMinutesPlanned}/420 min planning budget`);
   }
 
   if (typeof appointment.capacityMinutesRemaining === "number") {
