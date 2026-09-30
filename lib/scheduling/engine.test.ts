@@ -47,7 +47,7 @@ test("uses existing future workload and prefers capacity-aware replacement days"
       360,
       "Lawn Mowing",
       "Tue",
-      "2026-09-30T12:00:00.000Z"
+      "2026-09-29T12:00:00.000Z"
     ),
   ];
 
@@ -69,7 +69,7 @@ test("returns REVIEW when no replacement day has enough capacity", () => {
   ];
 
   const future = [
-    appointment("tue-load", 300, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
+    appointment("tue-load", 300, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
     appointment("wed-load", 300, "Lawn Mowing", "Wed", "2026-09-30T12:00:00.000Z"),
     appointment("thu-load", 300, "Lawn Mowing", "Thu", "2026-10-01T12:00:00.000Z"),
   ];
@@ -121,7 +121,7 @@ test("prefers the lower incremental route cost when capacity is equal", () => {
 
   const future = [
     {
-      ...appointment("near-tue", 120, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
+      ...appointment("near-tue", 120, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
       latitude: 30.4520,
       longitude: -81.6520,
     },
