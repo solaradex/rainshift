@@ -16,13 +16,19 @@ export async function POST() {
       );
     }
 
+    // A weather event can still require rescheduling after the first appointment
+    // of the day has already started or passed. Use the beginning of today rather
+    // than the exact current timestamp so today's remaining/live schedule is visible.
+    const todayStart = new Date();
+    todayStart.setUTCHours(0, 0, 0, 0);
+
     const { data: jobberAppointment, error: jobberError } = await supabase
       .from("appointments")
       .select("scheduled_date")
       .eq("company_id", companyId)
       .eq("source_provider", "jobber")
       .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
-      .gte("scheduled_date", new Date().toISOString())
+      .gte("scheduled_date", todayStart.toISOString())
       .order("scheduled_date", { ascending: true })
       .limit(1)
       .maybeSingle();
