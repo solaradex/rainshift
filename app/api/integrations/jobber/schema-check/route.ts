@@ -14,17 +14,6 @@ type MutationField = {
   args: Array<{ name: string; type: GraphQLTypeRef }>;
 };
 
-type InputField = {
-  name: string;
-  type: GraphQLTypeRef;
-};
-
-type InputType = {
-  kind: string;
-  name: string;
-  inputFields?: InputField[] | null;
-};
-
 const MUTATION_SCHEMA_QUERY = `query RainShiftJobberMutationSchema {
   __schema {
     mutationType {
@@ -59,53 +48,36 @@ function namedType(type: GraphQLTypeRef): string | null {
   return null;
 }
 
-function unwrapType(type: GraphQLTypeRef) {
+function unwrapType(type: GraphQLTypeRef): string {
   const parts: string[] = [];
   let current: GraphQLTypeRef | undefined = type;
 
   while (current) {
-    parts.push(
-      current.kind === "NON_NULL"
-        ? "!"
-        : current.kind === "LIST"
-          ? "[]"
-          : current.name ?? current.kind
-    );
+    if (current.kind === "NON_NULL") parts.push("!");
+    else if (current.kind === "LIST") parts.push("[]");
+    else parts.push(current.name ?? current.kind);
     current = current.ofType ?? undefined;
   }
 
   return parts.reverse().join("");
 }
 
-function typeNamesFor(fields: MutationField[]) {
-  return [
-    ...new Set(
-      fields.flatMap((field) =>
-        field.args
-          .map((arg) => namedType(arg.type))
-          .filter((name): name is string => Boolean(name))
-          .filter((name) => name.endsWith("Input"))
-      )
-    ),
-  ].slice(0, 60);
-}
-
-function isRelevantMutation(name: string) {
+function isRelevantMutation(name: string): boolean {
   return /assign|crew|user|visit|appointment|schedule|routing/i.test(name);
-}
-
-async function runSchemaQuery<T>(
-  accessToken: string,
-  query: string
-): Promise<T> {
-  return jobberGraphQL<T>(accessToken, query);
 }
 
 export async function GET() {
   try {
     const currentCompany = await getCurrentCompany();
-    const supabase = currentCompany.supabase;
-    const companyId = currentCompany.companyId;
+
+    if (!currentCompany.companyId) {
+      return NextResponse.json(
+        { ok: false, error: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    const { supabase, companyId } = currentCompany;
 
     const { data: connection, error } = await supabase
       .from("scheduling_connections")
@@ -133,20 +105,19 @@ export async function GET() {
     );
 
     const execute = () =>
-      runSchemaQuery<{
+      jobberGraphQL<{
         __schema: {
           mutationType: { fields: MutationField[] } | null;
         };
       }>(accessToken, MUTATION_SCHEMA_QUERY);
 
-    let schema: {
-      __schema: { mutationType: { fields: MutationField[] } | null };
-    };
+    let schema;
 
     try {
       schema = await execute();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+
       if (!message.includes("[HTTP 401]") && !message.includes("Access token expired")) {
         throw error;
       }
@@ -157,93 +128,41 @@ export async function GET() {
         connection,
         true
       );
+
       schema = await execute();
     }
 
     const mutations = schema.__schema.mutationType?.fields ?? [];
-    const relevantMutations = mutations.filter((field) =>
-      isRelevantMutation(field.name)
-    );
-    const inputTypeNames = typeNamesFor(relevantMutations);
-
-    let inputTypes: Record<string, InputType | null> = {};
-
-    if (inputTypeNames.length) {
-      const aliases = inputTypeNames
-        .map(
-          (name, index) =>
-            `t${index}: __type(name: ${JSON.stringify(name)}) {
-              kind
-              name
-              inputFields {
-                name
-                type {
-                  kind
-                  name
-                  ofType {
-                    kind
-                    name
-                    ofType {
-                      kind
-                      name
-                    }
-                  }
-                }
-              }
-            }`
-        )
-        .join("\n");
-
-      const inputSchema = await runSchemaQuery<Record<string, InputType | null>>(
-        accessToken,
-        `query RainShiftJobberInputTypes {\n${aliases}\n}`
-      );
-
-      inputTypes = Object.fromEntries(
-        inputTypeNames.map((name, index) => [name, inputSchema[`t${index}`] ?? null])
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      apiVersion: process.env.JOBBER_API_VERSION || "2026-05-12",
-      mutationCount: mutations.length,
-      relevantMutations: relevantMutations.map((field) => ({
+    const relevantMutations = mutations
+      .filter((field) => isRelevantMutation(field.name))
+      .map((field) => ({
         name: field.name,
         args: field.args.map((arg) => ({
           name: arg.name,
           type: unwrapType(arg.type),
           namedType: namedType(arg.type),
         })),
-      })),
-      relevantInputTypes: Object.fromEntries(
-        Object.entries(inputTypes).map(([name, type]) => [
-          name,
-          type
-            ? {
-                kind: type.kind,
-                fields:
-                  type.inputFields?.map((field) => ({
-                    name: field.name,
-                    type: unwrapType(field.type),
-                    namedType: namedType(field.type),
-                  })) ?? [],
-              }
-            : null,
-        ])
-      ),
+      }));
+
+    return NextResponse.json({
+      ok: true,
+      apiVersion: process.env.JOBBER_API_VERSION || "2026-05-12",
+      mutationCount: mutations.length,
+      relevantMutations,
       nextStep:
         relevantMutations.length > 0
-          ? "Use the mutation and input fields above to identify the exact Jobber crew-assignment mutation before adding it to the approval path."
-          : "Jobber did not expose assignment-related mutations through introspection. Check the full schema in Jobber GraphiQL or contact Jobber developer support.",
+          ? "Use these exact mutation names and argument/input types to add verified crew reassignment support."
+          : "No assignment-related mutation was exposed by Jobber introspection. Check the full Jobber schema or developer support.",
     });
   } catch (error) {
     console.error("RainShift Jobber schema check error", error);
-    const message =
-      error instanceof Error ? error.message : "Jobber schema check failed";
 
     return NextResponse.json(
-      { ok: false, error: message },
+      {
+        ok: false,
+        error:
+          error instanceof Error ? error.message : "Jobber schema check failed",
+      },
       { status: 500 }
     );
   }
