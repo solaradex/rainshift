@@ -55,7 +55,7 @@ export async function POST(request: Request) {
     }
 
     const crewChanges = proposal.appointments.filter(
-      (item) => item.status === "MOVE" && item.crewChangedFrom
+      (item) => Boolean(item.crewChangedFrom)
     );
 
     if (crewChanges.length) {
