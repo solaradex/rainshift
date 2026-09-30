@@ -33,6 +33,7 @@ export type ProposedAppointment = DemoAppointment & {
   capacityMinutesRemaining?: number;
   routePosition?: number;
   crewChangedFrom?: string;
+  crewChangedFromId?: string;
 };
 
 export type RouteBoardStop = {
