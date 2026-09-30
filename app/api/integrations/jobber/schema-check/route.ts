@@ -66,6 +66,13 @@ function isRelevantMutation(name: string): boolean {
   return /assign|crew|user|visit|appointment|schedule|routing/i.test(name);
 }
 
+
+const ASSIGNMENT_INPUT_TYPES = [
+  "AppointmentEditAssignmentInput",
+  "VisitEditAssignedUsersInput",
+  "VisitEditScheduleInput",
+];
+
 export async function GET() {
   try {
     const currentCompany = await getCurrentCompany();
@@ -144,14 +151,67 @@ export async function GET() {
         })),
       }));
 
+    const inputAliases = ASSIGNMENT_INPUT_TYPES
+      .map(
+        (name, index) => `t${index}: __type(name: ${JSON.stringify(name)}) {
+          kind
+          name
+          inputFields {
+            name
+            type {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                }
+              }
+            }
+          }
+        }`
+      )
+      .join("\n");
+
+    const inputSchema = await jobberGraphQL<Record<string, {
+      kind: string;
+      name: string;
+      inputFields?: Array<{ name: string; type: GraphQLTypeRef }> | null;
+    } | null>>(
+      accessToken,
+      `query RainShiftJobberAssignmentInputs {\n${inputAliases}\n}`
+    );
+
+    const assignmentInputs = Object.fromEntries(
+      ASSIGNMENT_INPUT_TYPES.map((name, index) => {
+        const type = inputSchema[`t${index}`];
+        return [
+          name,
+          type
+            ? {
+                kind: type.kind,
+                fields: (type.inputFields ?? []).map((field) => ({
+                  name: field.name,
+                  type: unwrapType(field.type),
+                  namedType: namedType(field.type),
+                })),
+              }
+            : null,
+        ];
+      })
+    );
+
     return NextResponse.json({
       ok: true,
       apiVersion: process.env.JOBBER_API_VERSION || "2026-05-12",
       mutationCount: mutations.length,
       relevantMutations,
+      assignmentInputs,
       nextStep:
         relevantMutations.length > 0
-          ? "Use these exact mutation names and argument/input types to add verified crew reassignment support."
+          ? "Use AppointmentEditAssignmentInput or VisitEditAssignedUsersInput fields to add verified crew reassignment support."
           : "No assignment-related mutation was exposed by Jobber introspection. Check the full Jobber schema or developer support.",
     });
   } catch (error) {
