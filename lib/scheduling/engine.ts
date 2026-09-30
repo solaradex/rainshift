@@ -116,6 +116,7 @@ function routeBoardStopFor(
     address: appointment.address,
     service: appointment.service,
     crew: appointment.crew,
+    ...(appointment.crewId ? { crewId: appointment.crewId } : {}),
     start,
     duration: appointment.duration,
     status,
@@ -139,7 +140,7 @@ function buildRouteBoard(
     );
     if (!replacement) continue;
 
-    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const key = (appointment.crewId ?? appointment.crew) + ":" + replacement.date.slice(0, 10);
     const stops = grouped.get(key) ?? [];
     stops.push(routeBoardStopFor(appointment, appointment.scheduledDate, "SCHEDULED"));
     grouped.set(key, stops);
@@ -153,7 +154,7 @@ function buildRouteBoard(
     );
     if (!replacement) continue;
 
-    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const key = (appointment.crewId ?? appointment.crew) + ":" + replacement.date.slice(0, 10);
     const stops = grouped.get(key) ?? [];
     stops.push(
       routeBoardStopFor(
@@ -201,7 +202,10 @@ function buildRouteBoard(
       }
     }
 
-    const [crew, date] = key.split(":");
+    const [crewKey, date] = key.split(":");
+    const crewStop = stops.find((stop) => stop.crewId === crewKey);
+    const crew = crewStop?.crew ?? crewKey;
+    const crewId = crewStop?.crewId;
     const label =
       replacementDays.find((day) => day.date.slice(0, 10) === date)?.label ??
       getWeekday(date + "T00:00:00.000Z");
@@ -211,6 +215,7 @@ function buildRouteBoard(
       date,
       label,
       crew,
+      ...(crewId ? { crewId } : {}),
       stops,
       serviceMinutes,
       driveMinutes:
@@ -343,7 +348,7 @@ function buildExistingRoutes(
     );
     if (!replacement) continue;
 
-    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const key = (appointment.crewId ?? appointment.crew) + ":" + replacement.date.slice(0, 10);
     (routes[key] ??= []).push(stop);
   }
 
@@ -446,7 +451,7 @@ function buildExistingLoad(
     const replacement = replacementDays.find((day) => day.date.slice(0, 10) === scheduled);
     if (!replacement) continue;
 
-    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const key = (appointment.crewId ?? appointment.crew) + ":" + replacement.date.slice(0, 10);
     load[key] = (load[key] ?? 0) + appointment.duration;
   }
 
@@ -479,17 +484,17 @@ function chooseReplacementDay(
         preferenceDistance:
           preferredIndex < 0 ? index : Math.abs(index - preferredIndex),
         load:
-          crewLoad[appointment.crew + ":" + day.date.slice(0, 10)] ?? 0,
+          crewLoad[(appointment.crewId ?? appointment.crew) + ":" + day.date.slice(0, 10)] ?? 0,
         routeCost:
           insertionRouteCostMiles(
             appointment,
-            crewRoutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? []
+            crewRoutes[(appointment.crewId ?? appointment.crew) + ":" + day.date.slice(0, 10)] ?? []
           ),
         driveMinutes:
-          crewDriveMinutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? 0,
+          crewDriveMinutes[(appointment.crewId ?? appointment.crew) + ":" + day.date.slice(0, 10)] ?? 0,
         timeFeasible: hasCompatibleTimeWindow(
           appointment,
-          crewRoutes[appointment.crew + ":" + day.date.slice(0, 10)] ?? []
+          crewRoutes[(appointment.crewId ?? appointment.crew) + ":" + day.date.slice(0, 10)] ?? []
         ),
       }))
       .sort((a, b) =>

@@ -132,6 +132,38 @@ export async function getJobberAccount(accessToken: string) {
   );
 }
 
+export async function editJobberAppointmentAssignment(
+  accessToken: string,
+  appointmentId: string,
+  assignedUserIds: string[]
+) {
+  return jobberGraphQL<{
+    appointmentEditAssignment: {
+      userErrors: Array<{ message: string; path?: string[] }>;
+    };
+  }>(
+    accessToken,
+    `mutation EditAppointmentAssignment(
+      $appointmentId: EncodedId!
+      $input: AppointmentEditAssignmentInput!
+    ) {
+      appointmentEditAssignment(
+        appointmentId: $appointmentId
+        input: $input
+      ) {
+        userErrors {
+          message
+          path
+        }
+      }
+    }`,
+    {
+      appointmentId,
+      input: { assignedUserIds },
+    }
+  );
+}
+
 
 export async function editJobberAppointmentSchedule(
   accessToken: string,

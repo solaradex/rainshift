@@ -4,6 +4,7 @@ export type AppointmentUpdate = {
   status: "KEEP" | "RESCHEDULED";
   scheduledDate?: string;
   proposedDate?: string;
+  crewId?: string;
   moveReason?: string | null;
   approvedAt?: string;
 };

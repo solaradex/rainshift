@@ -57,6 +57,7 @@ export function createSupabaseSchedulingProvider(
           customer: customer.name,
           address: customer.address,
           crew: crew.name,
+          crewId: record.crew_id,
           service: record.service,
           duration: record.duration_minutes,
           distance: 0,

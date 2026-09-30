@@ -295,25 +295,34 @@ export default function Home() {
     if (!proposal) return [];
 
     const dates = [...new Set(proposal.routeBoard.map((day) => day.date))].sort();
-    const crews = [
-      ...new Set(
-        proposal.appointments.map((item) => item.crew).filter(Boolean)
-      ),
-    ].sort();
+    const crewEntries = [
+      ...new Map(
+        proposal.appointments
+          .filter((item) => item.crew)
+          .map((item) => [
+            item.crewId ?? item.crew,
+            { crew: item.crew, crewId: item.crewId },
+          ])
+      ).values(),
+    ].sort((a, b) => a.crew.localeCompare(b.crew));
 
     const byKey = new Map(
-      proposal.routeBoard.map((day) => [day.crew + ":" + day.date, day])
+      proposal.routeBoard.map((day) => [
+        (day.crewId ?? day.crew) + ":" + day.date,
+        day,
+      ])
     );
 
-    return crews.flatMap((crew) =>
+    return crewEntries.flatMap(({ crew, crewId }) =>
       dates.map((date) =>
-        byKey.get(crew + ":" + date) ?? {
+        byKey.get((crewId ?? crew) + ":" + date) ?? {
           date,
           label: new Intl.DateTimeFormat("en-US", {
             weekday: "short",
             timeZone: "UTC",
           }).format(new Date(date + "T12:00:00.000Z")),
           crew,
+          ...(crewId ? { crewId } : {}),
           stops: [],
           serviceMinutes: 0,
           totalPlannedMinutes: 0,
@@ -326,6 +335,7 @@ export default function Home() {
   function moveAppointmentToRoute(
     appointmentId: string,
     targetCrew: string,
+    targetCrewId: string | undefined,
     targetDate: string
   ) {
     setApproved(false);
@@ -355,9 +365,11 @@ export default function Home() {
         )
       );
 
+      const targetRouteKey = (targetCrewId ?? targetCrew) + ":" + targetDate;
+
       if (
         !routeBoard.some(
-          (day) => day.crew === targetCrew && day.date === targetDate
+          (day) => (day.crewId ?? day.crew) + ":" + day.date === targetRouteKey
         )
       ) {
         routeBoard.push({
@@ -367,6 +379,7 @@ export default function Home() {
             timeZone: "UTC",
           }).format(new Date(targetDate + "T12:00:00.000Z")),
           crew: targetCrew,
+          ...(targetCrewId ? { crewId: targetCrewId } : {}),
           stops: [],
           serviceMinutes: 0,
           totalPlannedMinutes: 0,
@@ -375,25 +388,29 @@ export default function Home() {
       }
 
       routeBoard = routeBoard.map((day) => {
-        if (day.crew !== targetCrew || day.date !== targetDate) return day;
+        if ((day.crewId ?? day.crew) + ":" + day.date !== targetRouteKey) return day;
 
         return rebuildRouteDay(day, [
           ...day.stops,
           {
             ...sourceStop,
             crew: targetCrew,
+            ...(targetCrewId ? { crewId: targetCrewId } : {}),
             start: newDate,
             movedFrom: dragged.scheduledDate,
             crewChangedFrom:
-              dragged.crewChangedFrom ??
-              (dragged.crew !== targetCrew ? dragged.crew : undefined),
+              dragged.crewChangedFrom &&
+              targetCrewId === dragged.crewChangedFromId
+                ? undefined
+                : dragged.crewChangedFrom ??
+                  (dragged.crew !== targetCrew ? dragged.crew : undefined),
             status: "MOVE",
           },
         ]);
       });
 
       const targetBoard = routeBoard.find(
-        (day) => day.crew === targetCrew && day.date === targetDate
+        (day) => (day.crewId ?? day.crew) + ":" + day.date === targetRouteKey
       );
       const updatedRouteStop = targetBoard?.stops.find(
         (stop) => stop.id === appointmentId
@@ -409,17 +426,26 @@ export default function Home() {
         : undefined;
 
       const returningToOriginalCrew =
-        Boolean(dragged.crewChangedFrom) &&
-        targetCrew === dragged.crewChangedFrom;
+        Boolean(dragged.crewChangedFromId) &&
+        targetCrewId === dragged.crewChangedFromId;
 
       const nextCrew = returningToOriginalCrew
         ? dragged.crewChangedFrom!
         : targetCrew;
 
+      const nextCrewId = returningToOriginalCrew
+        ? dragged.crewChangedFromId
+        : targetCrewId;
+
       const originalCrew = returningToOriginalCrew
         ? undefined
         : dragged.crewChangedFrom ??
-          (dragged.crew !== targetCrew ? dragged.crew : undefined);
+          (dragged.crewId !== targetCrewId ? dragged.crew : undefined);
+
+      const originalCrewId = returningToOriginalCrew
+        ? undefined
+        : dragged.crewChangedFromId ??
+          (dragged.crewId !== targetCrewId ? dragged.crewId : undefined);
 
       const appointments = current.appointments.map((item) => {
         if (item.id !== appointmentId) return item;
@@ -427,7 +453,9 @@ export default function Home() {
         return {
           ...item,
           crew: nextCrew,
+          crewId: nextCrewId,
           crewChangedFrom: originalCrew,
+          crewChangedFromId: originalCrewId,
           newDate,
           newDay: new Intl.DateTimeFormat("en-US", {
             weekday: "short",
@@ -459,7 +487,7 @@ export default function Home() {
             ". " +
             (overCapacity
               ? "That crew route is over the planning budget. Approval is blocked."
-              : "Route totals recalculated. Jobber approval remains blocked until crew assignment support is available.")
+              : "Route totals recalculated. The crew change will be written to Jobber when you approve.")
           : "Moved " +
             dragged.customer +
             " to " +
@@ -751,7 +779,7 @@ export default function Home() {
               <h2 style={{ margin: 0, fontSize: 20 }}>Proposed route board</h2>
               <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
                 Replacement routes are ordered by service start time. Drag a MOVED job to another
-                day for the same crew to rebuild the route totals instantly.
+                crew or day to rebuild the route totals instantly.
               </p>
             </div>
 
@@ -777,7 +805,12 @@ export default function Home() {
                     onDrop={(event) => {
                       event.preventDefault();
                       if (draggedAppointmentId) {
-                        moveAppointmentToRoute(draggedAppointmentId, day.crew, day.date);
+                        moveAppointmentToRoute(
+                          draggedAppointmentId,
+                          day.crew,
+                          day.crewId,
+                          day.date
+                        );
                       }
                     }}
                     style={{
@@ -1080,7 +1113,7 @@ export default function Home() {
                   : routeOverCapacity
                     ? "One or more routes exceed the 420-minute planning budget. Drag moved jobs to another crew or day."
                     : crewReassignmentsPending
-                      ? "Crew changes are preview-only until Jobber crew assignment support is available. Revert reassigned jobs before approval."
+                      ? "Crew changes will be written to Jobber together with the approved schedule."
                       : counts.move > 0
                         ? "Approve to write MOVE decisions back to Jobber. KEEP decisions stay where they are."
                         : "No changes are recommended for this weather window."}
@@ -1091,8 +1124,7 @@ export default function Home() {
                   approved ||
                   counts.review > 0 ||
                   counts.move === 0 ||
-                  routeOverCapacity ||
-                  crewReassignmentsPending
+                  routeOverCapacity
                 }
                 style={{
                   border: 0,
@@ -1114,9 +1146,7 @@ export default function Home() {
                     ? "Resolve Reviews First"
                     : routeOverCapacity
                       ? "Adjust Route Capacity"
-                      : crewReassignmentsPending
-                        ? "Sync Crew Changes First"
-                        : counts.move > 0
+                      : counts.move > 0
                       ? `Approve ${counts.move} Jobber change${counts.move === 1 ? "" : "s"}`
                       : "No Changes to Approve"}
               </button>
