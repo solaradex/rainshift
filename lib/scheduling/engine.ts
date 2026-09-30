@@ -2,6 +2,8 @@ import type {
   DemoAppointment,
   ProposedAppointment,
   RescheduleProposal,
+  RouteBoardDay,
+  RouteBoardStop,
   WeatherEvent,
 } from "./types";
 
@@ -101,6 +103,131 @@ function routeMiles(route: RouteStop[]) {
   }
 
   return miles;
+}
+
+function routeBoardStopFor(
+  appointment: DemoAppointment | ProposedAppointment,
+  start: string,
+  status: RouteBoardStop["status"]
+): RouteBoardStop {
+  return {
+    id: appointment.id,
+    customer: appointment.customer,
+    address: appointment.address,
+    service: appointment.service,
+    crew: appointment.crew,
+    start,
+    duration: appointment.duration,
+    status,
+    ...(appointment.latitude !== undefined ? { latitude: appointment.latitude } : {}),
+    ...(appointment.longitude !== undefined ? { longitude: appointment.longitude } : {}),
+  };
+}
+
+function buildRouteBoard(
+  existingAppointments: DemoAppointment[],
+  proposedAppointments: ProposedAppointment[],
+  replacementDays: Array<{ label: string; offset: number; date: string }>
+): RouteBoardDay[] {
+  const grouped = new Map<string, RouteBoardStop[]>();
+
+  for (const appointment of existingAppointments) {
+    if (!appointment.scheduledDate) continue;
+
+    const replacement = replacementDays.find(
+      (day) => day.date.slice(0, 10) === dateKey(appointment.scheduledDate!)
+    );
+    if (!replacement) continue;
+
+    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const stops = grouped.get(key) ?? [];
+    stops.push(routeBoardStopFor(appointment, appointment.scheduledDate, "SCHEDULED"));
+    grouped.set(key, stops);
+  }
+
+  for (const appointment of proposedAppointments) {
+    if (appointment.status !== "MOVE" || !appointment.newDate) continue;
+
+    const replacement = replacementDays.find(
+      (day) => day.date.slice(0, 10) === dateKey(appointment.newDate!)
+    );
+    if (!replacement) continue;
+
+    const key = appointment.crew + ":" + replacement.date.slice(0, 10);
+    const stops = grouped.get(key) ?? [];
+    stops.push(
+      routeBoardStopFor(
+        appointment,
+        appointment.newDate,
+        "MOVE"
+      )
+    );
+    stops[stops.length - 1].movedFrom = appointment.scheduledDate;
+    grouped.set(key, stops);
+  }
+
+  const boards: RouteBoardDay[] = [];
+
+  for (const [key, stops] of grouped.entries()) {
+    stops.sort(
+      (a, b) =>
+        new Date(a.start).getTime() - new Date(b.start).getTime() ||
+        a.id.localeCompare(b.id)
+    );
+
+    let driveMinutes = 0;
+    let serviceMinutes = 0;
+
+    for (let index = 0; index < stops.length; index += 1) {
+      serviceMinutes += stops[index].duration;
+
+      if (index > 0) {
+        const before = stops[index - 1];
+        const after = stops[index];
+
+        if (
+          typeof before.latitude === "number" &&
+          typeof before.longitude === "number" &&
+          typeof after.latitude === "number" &&
+          typeof after.longitude === "number"
+        ) {
+          driveMinutes += milesToMinutes(
+            haversineMiles(
+              { latitude: before.latitude, longitude: before.longitude },
+              { latitude: after.latitude, longitude: after.longitude }
+            )
+          );
+        }
+      }
+    }
+
+    const [crew, date] = key.split(":");
+    const label =
+      replacementDays.find((day) => day.date.slice(0, 10) === date)?.label ??
+      getWeekday(date + "T00:00:00.000Z");
+    const totalPlannedMinutes = Math.round(serviceMinutes + driveMinutes);
+
+    boards.push({
+      date,
+      label,
+      crew,
+      stops,
+      serviceMinutes,
+      driveMinutes:
+        driveMinutes > 0 ? Math.round(driveMinutes) : undefined,
+      totalPlannedMinutes,
+      capacityMinutesRemaining: Math.max(
+        0,
+        Math.round(CREW_MOVE_CAPACITY_MINUTES - totalPlannedMinutes)
+      ),
+    });
+  }
+
+  return boards.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      a.crew.localeCompare(b.crew)
+  );
 }
 
 function insertionRouteCostMiles(
@@ -473,6 +600,11 @@ export function buildRescheduleProposal(
   return {
     weather,
     appointments: proposed,
+    routeBoard: buildRouteBoard(
+      existingAppointments,
+      proposed,
+      replacementDays
+    ),
     counts: {
       move: proposed.filter((item) => item.status === "MOVE").length,
       keep: proposed.filter((item) => item.status === "KEEP").length,
