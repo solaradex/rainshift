@@ -48,6 +48,32 @@ function formatDateTime(value?: string) {
   }).format(date);
 }
 
+function routeSummary(appointment: ProposedAppointment) {
+  const details: string[] = [];
+
+  if (typeof appointment.routeMilesAdded === "number") {
+    details.push(`+${appointment.routeMilesAdded.toFixed(1)} mi route impact`);
+  }
+
+  if (typeof appointment.driveMinutesAdded === "number") {
+    details.push(`+${appointment.driveMinutesAdded} min drive`);
+  }
+
+  if (typeof appointment.crewMinutesPlanned === "number") {
+    details.push(`${appointment.crewMinutesPlanned}/420 min planned`);
+  }
+
+  if (typeof appointment.capacityMinutesRemaining === "number") {
+    details.push(`${appointment.capacityMinutesRemaining} min buffer`);
+  }
+
+  if (typeof appointment.routePosition === "number") {
+    details.push(`stop #${appointment.routePosition}`);
+  }
+
+  return details.join(" · ");
+}
+
 function nextBusinessDate(eventDate: string) {
   const date = new Date(eventDate.slice(0, 10) + "T12:00:00Z");
   for (let i = 0; i < 7; i += 1) {
@@ -174,6 +200,11 @@ export default function Home() {
         if (status !== "MOVE") {
           updated.newDate = undefined;
           updated.newDay = undefined;
+          updated.routeMilesAdded = undefined;
+          updated.driveMinutesAdded = undefined;
+          updated.crewMinutesPlanned = undefined;
+          updated.capacityMinutesRemaining = undefined;
+          updated.routePosition = undefined;
         }
 
         return updated;
@@ -438,8 +469,35 @@ export default function Home() {
                           {appointment.status}
                         </button>
                       </td>
-                      <td style={{ padding: 16, color: "#526170", maxWidth: 280 }}>
-                        {appointment.reason}
+                      <td style={{ padding: 16, color: "#526170", maxWidth: 340 }}>
+                        <div>{appointment.reason}</div>
+                        {appointment.status === "MOVE" && routeSummary(appointment) && (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              padding: "8px 10px",
+                              borderRadius: 9,
+                              background: "#f4f7fb",
+                              color: "#40546b",
+                              fontSize: 12,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {routeSummary(appointment)}
+                          </div>
+                        )}
+                        {appointment.status === "REVIEW" && (
+                          <div
+                            style={{
+                              marginTop: 8,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: "#8a5a00",
+                            }}
+                          >
+                            Route or capacity needs operator attention.
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: 16, fontWeight: 700 }}>
                         {appointment.status === "MOVE" ? formatDateTime(appointment.newDate) : "—"}
@@ -449,22 +507,6 @@ export default function Home() {
                 </tbody>
               </table>
             </div>
-
-            {approvalMessage && (
-              <div
-                style={{
-                  margin: "0 22px",
-                  padding: "14px 16px",
-                  borderRadius: 12,
-                  background: "#eef8f2",
-                  color: "#24633f",
-                  fontWeight: 700,
-                  fontSize: 14,
-                }}
-              >
-                {approvalMessage}
-              </div>
-            )}
 
             {approvalMessage && (
               <div
