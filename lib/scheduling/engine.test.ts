@@ -19,6 +19,8 @@ function appointment(
     service,
     duration,
     distance: 0,
+    latitude,
+    longitude,
     preferredDay,
     scheduledDate,
   };
@@ -103,4 +105,45 @@ test("keeps surface-sensitive work for human review at medium rain risk", () => 
   assert.equal(mow?.status, "MOVE");
   assert.equal(proposal.counts.move, 1);
   assert.equal(proposal.counts.review, 1);
+});
+
+
+test("prefers the lower incremental route cost when capacity is equal", () => {
+  const affected = [
+    {
+      ...appointment("route-job", 60, "Lawn Mowing", "Fri"),
+      latitude: 30.4500,
+      longitude: -81.6500,
+    },
+  ];
+
+  const future = [
+    {
+      ...appointment("near-tue", 120, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+      latitude: 30.4520,
+      longitude: -81.6520,
+    },
+    {
+      ...appointment("far-wed", 120, "Lawn Mowing", "Wed", "2026-09-30T12:00:00.000Z"),
+      latitude: 30.6000,
+      longitude: -81.8000,
+    },
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+  const moved = proposal.appointments.find((item) => item.id === "route-job");
+
+  assert.equal(moved?.status, "MOVE");
+  assert.equal(moved?.newDate?.slice(0, 10), "2026-09-29");
+});
+
+test("keeps legacy replacement behavior when coordinates are unavailable", () => {
+  const proposal = buildRescheduleProposal(
+    [appointment("legacy", 60, "Lawn Mowing", "Wed")],
+    highRain
+  );
+
+  const moved = proposal.appointments.find((item) => item.id === "legacy");
+  assert.equal(moved?.status, "MOVE");
+  assert.equal(moved?.newDate?.slice(0, 10), "2026-09-30");
 });
