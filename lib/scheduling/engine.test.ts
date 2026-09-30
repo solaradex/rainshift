@@ -189,3 +189,69 @@ test("returns REVIEW when service time plus estimated drive time exceeds crew ca
   assert.equal(moved?.status, "REVIEW");
   assert.match(moved?.reason ?? "", /No replacement day has enough crew capacity/);
 });
+
+
+test("preserves the original service start time on the replacement date", () => {
+  const affected = [
+    appointment(
+      "timed-move",
+      60,
+      "Lawn Mowing",
+      "Wed",
+      "2026-09-28T14:30:00.000Z"
+    ),
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain);
+  const moved = proposal.appointments.find((item) => item.id === "timed-move");
+
+  assert.equal(moved?.status, "MOVE");
+  assert.equal(moved?.newDate, "2026-09-30T14:30:00.000Z");
+});
+
+test("moves around a fixed time-window conflict instead of double-booking a crew", () => {
+  const affected = [
+    {
+      ...appointment(
+        "window-job",
+        60,
+        "Lawn Mowing",
+        "Tue",
+        "2026-09-28T10:00:00.000Z"
+      ),
+      latitude: 30.45,
+      longitude: -81.65,
+    },
+  ];
+
+  const future = [
+    {
+      ...appointment(
+        "tuesday-conflict",
+        120,
+        "Lawn Mowing",
+        "Tue",
+        "2026-09-29T09:00:00.000Z"
+      ),
+      latitude: 30.45,
+      longitude: -81.65,
+    },
+    {
+      ...appointment(
+        "wednesday-compatible",
+        60,
+        "Lawn Mowing",
+        "Wed",
+        "2026-09-30T08:00:00.000Z"
+      ),
+      latitude: 30.45,
+      longitude: -81.65,
+    },
+  ];
+
+  const proposal = buildRescheduleProposal(affected, highRain, future);
+  const moved = proposal.appointments.find((item) => item.id === "window-job");
+
+  assert.equal(moved?.status, "MOVE");
+  assert.equal(moved?.newDate, "2026-10-01T10:00:00.000Z");
+});
