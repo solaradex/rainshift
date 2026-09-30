@@ -913,6 +913,9 @@ export default function Home() {
                             {stop.status === "MOVE" && (
                               <div style={{ marginTop: 5, color: "#a52a2a", fontSize: 11, fontWeight: 800 }}>
                                 MOVED IN · originally {formatDateTime(stop.movedFrom)}
+                                {stop.crewChangedFrom
+                                  ? " · reassigned from " + stop.crewChangedFrom
+                                  : ""}
                               </div>
                             )}
                           </div>
@@ -1073,10 +1076,14 @@ export default function Home() {
             >
               <div style={{ color: "#5f6c7b", fontSize: 14 }}>
                 {proposal.counts.review > 0
-                  ? "Click a decision to cycle KEEP → MOVE → REVIEW. MOVE shows the exact replacement date before approval."
-                  : proposal.counts.move > 0
-                    ? "Approve to write MOVE decisions back to Jobber. KEEP decisions stay where they are."
-                    : "No changes are recommended for this weather window."}
+                  ? "Resolve all REVIEW items before approval."
+                  : routeOverCapacity
+                    ? "One or more routes exceed the 420-minute planning budget. Drag moved jobs to another crew or day."
+                    : crewReassignmentsPending
+                      ? "Crew changes are preview-only until Jobber crew assignment support is available. Revert reassigned jobs before approval."
+                      : counts.move > 0
+                        ? "Approve to write MOVE decisions back to Jobber. KEEP decisions stay where they are."
+                        : "No changes are recommended for this weather window."}
               </div>
               <button
                 onClick={approve}
