@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getCurrentCompany } from "@/lib/auth/company";
-import { rescheduleJobberAppointment } from "@/lib/jobber-schedule";
+import {
+  reassignJobberAppointment,
+  rescheduleJobberAppointment,
+} from "@/lib/jobber-schedule";
 import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
 import { formatRescheduledDate, sendSms } from "@/lib/sms";
 import type { RescheduleProposal } from "@/lib/scheduling/types";
@@ -54,22 +57,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const crewChanges = proposal.appointments.filter(
-      (item) => Boolean(item.crewChangedFrom)
-    );
-
-    if (crewChanges.length) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error:
-            "This dispatch plan includes crew reassignments. Jobber crew reassignment is not yet supported by the connected mutation layer, so the plan must be reverted to the original crews before approval.",
-          crewChangeAppointmentIds: crewChanges.map((item) => item.id),
-        },
-        { status: 409 }
-      );
-    }
-
     const reviews = proposal.appointments.filter(
       (item) => item.status === "REVIEW"
     );
@@ -107,6 +94,24 @@ export async function POST(request: Request) {
 
     if (connectionError) throw connectionError;
 
+    const { data: crews, error: crewsError } = await supabase
+      .from("crews")
+      .select("id,name,jobber_user_id")
+      .eq("company_id", companyId);
+
+    if (crewsError) throw crewsError;
+
+    const crewMap = new Map(
+      (crews ?? []).map((crew) => [
+        crew.id,
+        {
+          id: crew.id,
+          name: crew.name,
+          jobberUserId: crew.jobber_user_id,
+        },
+      ])
+    );
+
     const updatedAppointments: Array<{
       id: string;
       status: string;
@@ -138,7 +143,7 @@ export async function POST(request: Request) {
       const { data: record, error: recordError } = await supabase
         .from("appointments")
         .select(
-          "id,source_provider,external_id,customer_id,service,scheduled_date,duration_minutes"
+          "id,source_provider,external_id,customer_id,crew_id,service,scheduled_date,duration_minutes"
         )
         .eq("id", item.id)
         .eq("company_id", companyId)
@@ -157,6 +162,56 @@ export async function POST(request: Request) {
 
       const currentStart = new Date(record.scheduled_date);
       const targetStart = new Date(item.newDate);
+
+      const crewChangeRequested =
+        Boolean(item.crewChangedFrom) || Boolean(item.crewChangedFromId);
+
+      let targetCrew:
+        | { id: string; name: string; jobberUserId: string | null }
+        | undefined;
+
+      if (crewChangeRequested) {
+        if (
+          !item.crewId ||
+          !item.crewChangedFrom ||
+          !item.crewChangedFromId ||
+          item.crewChangedFromId !== record.crew_id ||
+          item.crewId === record.crew_id
+        ) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "Crew reassignment could not be validated against the current appointment crew",
+              appointmentId: item.id,
+            },
+            { status: 409 }
+          );
+        }
+
+        targetCrew = crewMap.get(item.crewId);
+
+        if (!targetCrew?.jobberUserId) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error:
+                "The selected RainShift crew is missing its Jobber user mapping. Run a Jobber sync and try again.",
+              appointmentId: item.id,
+            },
+            { status: 409 }
+          );
+        }
+      } else if (item.crewId && item.crewId !== record.crew_id) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Appointment crew differs from the approved proposal",
+            appointmentId: item.id,
+          },
+          { status: 409 }
+        );
+      }
 
       if (
         Number.isNaN(currentStart.getTime()) ||
@@ -195,6 +250,11 @@ export async function POST(request: Request) {
           );
         }
 
+        const originalEndAt = new Date(
+          currentStart.getTime() +
+            Math.max(1, record.duration_minutes) * 60 * 1000
+        ).toISOString();
+
         await rescheduleJobberAppointment(
           supabase,
           companyId,
@@ -204,6 +264,37 @@ export async function POST(request: Request) {
           endAt,
           timezone
         );
+
+        if (targetCrew?.jobberUserId) {
+          try {
+            await reassignJobberAppointment(
+              supabase,
+              companyId,
+              jobberConnection,
+              record.external_id,
+              [targetCrew.jobberUserId]
+            );
+          } catch (assignmentError) {
+            try {
+              await rescheduleJobberAppointment(
+                supabase,
+                companyId,
+                jobberConnection,
+                record.external_id,
+                currentStart.toISOString(),
+                originalEndAt,
+                timezone
+              );
+            } catch (rollbackError) {
+              console.error("RainShift Jobber schedule rollback failed", {
+                appointmentId: item.id,
+                rollbackError,
+              });
+            }
+
+            throw assignmentError;
+          }
+        }
       }
 
       const updated = await provider.updateAppointment(item.id, {
@@ -211,6 +302,7 @@ export async function POST(request: Request) {
         scheduledDate: startAt,
         status: "RESCHEDULED",
         moveReason: item.reason,
+        crewId: targetCrew?.id,
         approvedAt: new Date().toISOString(),
       });
 
