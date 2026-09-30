@@ -136,6 +136,36 @@ function rebuildRouteDay(day: RouteBoardDay, stops: RouteBoardDay["stops"]): Rou
   };
 }
 
+function insertionMilesFor(
+  stop: RouteBoardDay["stops"][number],
+  route: RouteBoardDay["stops"]
+) {
+  const neighbors = [...route]
+    .filter((candidate) => candidate.id !== stop.id)
+    .sort(
+      (a, b) =>
+        new Date(a.start).getTime() - new Date(b.start).getTime() ||
+        a.id.localeCompare(b.id)
+    );
+
+  if (!neighbors.length) return 0;
+
+  const index = neighbors.findIndex(
+    (candidate) => new Date(candidate.start).getTime() > new Date(stop.start).getTime()
+  );
+  const insertIndex = index < 0 ? neighbors.length : index;
+  const before = neighbors[insertIndex - 1];
+  const after = neighbors[insertIndex];
+
+  if (!before && after) return boardMiles(stop, after);
+  if (before && !after) return boardMiles(before, stop);
+  if (before && after) {
+    return boardMiles(before, stop) + boardMiles(stop, after) - boardMiles(before, after);
+  }
+
+  return 0;
+}
+
 function moveToDateKeepTime(value: string, targetDate: string) {
   const source = new Date(value);
   const target = new Date(targetDate + "T00:00:00.000Z");
@@ -270,24 +300,6 @@ export default function Home() {
         targetDate
       );
 
-      const appointments = current.appointments.map((item) => {
-        if (item.id !== appointmentId) return item;
-
-        return {
-          ...item,
-          newDate,
-          newDay: new Intl.DateTimeFormat("en-US", {
-            weekday: "short",
-            timeZone: "UTC",
-          }).format(new Date(newDate)),
-          routeMilesAdded: undefined,
-          driveMinutesAdded: undefined,
-          crewMinutesPlanned: undefined,
-          capacityMinutesRemaining: undefined,
-          routePosition: undefined,
-        };
-      });
-
       const sourceStop = current.routeBoard
         .flatMap((boardDay) => boardDay.stops)
         .find((stop) => stop.id === appointmentId);
@@ -311,6 +323,38 @@ export default function Home() {
         return rebuildRouteDay(day, withoutDragged);
       });
 
+      const targetBoard = routeBoard.find(
+        (day) => day.crew === targetCrew && day.date === targetDate
+      );
+      const updatedRouteStop = targetBoard?.stops.find(
+        (stop) => stop.id === appointmentId
+      );
+      const addedMiles = updatedRouteStop && targetBoard
+        ? insertionMilesFor(updatedRouteStop, targetBoard.stops)
+        : 0;
+      const driveMinutesAdded = Math.round((addedMiles / 25) * 60);
+      const routePosition = updatedRouteStop && targetBoard
+        ? targetBoard.stops.findIndex((stop) => stop.id === appointmentId) + 1
+        : undefined;
+      const appointments = current.appointments.map((item) => {
+        if (item.id !== appointmentId) return item;
+
+        return {
+          ...item,
+          newDate,
+          newDay: new Intl.DateTimeFormat("en-US", {
+            weekday: "short",
+            timeZone: "UTC",
+          }).format(new Date(newDate)),
+          routeMilesAdded: Number(addedMiles.toFixed(1)),
+          driveMinutesAdded,
+          crewMinutesPlanned: targetBoard?.totalPlannedMinutes,
+          capacityMinutesRemaining: targetBoard?.capacityMinutesRemaining,
+          routePosition,
+        };
+      });
+
+      const overCapacity = targetBoard && targetBoard.totalPlannedMinutes > 420;
       setDispatchMessage(
         "Moved " +
           dragged.customer +
@@ -322,7 +366,10 @@ export default function Home() {
             month: "short",
             day: "numeric",
           }).format(new Date(newDate)) +
-          ". Route totals recalculated."
+          ". " +
+          (overCapacity
+            ? "That route is over the planning budget; approval is blocked until adjusted."
+            : "Route totals recalculated.")
       );
 
       return {
