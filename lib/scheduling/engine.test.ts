@@ -47,7 +47,7 @@ test("uses existing future workload and prefers capacity-aware replacement days"
       360,
       "Lawn Mowing",
       "Tue",
-      "2026-09-29T12:00:00.000Z"
+      "2026-09-30T12:00:00.000Z"
     ),
   ];
 
@@ -69,7 +69,7 @@ test("returns REVIEW when no replacement day has enough capacity", () => {
   ];
 
   const future = [
-    appointment("tue-load", 300, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+    appointment("tue-load", 300, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
     appointment("wed-load", 300, "Lawn Mowing", "Wed", "2026-09-30T12:00:00.000Z"),
     appointment("thu-load", 300, "Lawn Mowing", "Thu", "2026-10-01T12:00:00.000Z"),
   ];
@@ -121,7 +121,7 @@ test("prefers the lower incremental route cost when capacity is equal", () => {
 
   const future = [
     {
-      ...appointment("near-tue", 120, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+      ...appointment("near-tue", 120, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
       latitude: 30.4520,
       longitude: -81.6520,
     },
@@ -167,17 +167,17 @@ test("returns REVIEW when service time plus estimated drive time exceeds crew ca
 
   const future = [
     {
-      ...appointment("route-1", 360, "Lawn Mowing", "Tue", "2026-09-29T12:00:00.000Z"),
+      ...appointment("route-1", 360, "Lawn Mowing", "Tue", "2026-09-30T12:00:00.000Z"),
       latitude: 30.4500,
       longitude: -81.6500,
     },
     {
-      ...appointment("route-2", 30, "Lawn Mowing", "Tue", "2026-09-29T13:00:00.000Z"),
+      ...appointment("route-2", 360, "Lawn Mowing", "Tue", "2026-10-01T13:00:00.000Z"),
       latitude: 30.6500,
       longitude: -81.8500,
     },
     {
-      ...appointment("route-3", 30, "Lawn Mowing", "Tue", "2026-09-29T14:00:00.000Z"),
+      ...appointment("route-3", 360, "Lawn Mowing", "Tue", "2026-10-02T14:00:00.000Z"),
       latitude: 30.8500,
       longitude: -82.0500,
     },
