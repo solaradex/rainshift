@@ -278,6 +278,11 @@ export default function Home() {
     [proposal]
   );
 
+  const routeOverCapacity = useMemo(
+    () => proposal?.routeBoard.some((day) => day.totalPlannedMinutes > 420) ?? false,
+    [proposal]
+  );
+
   function moveAppointmentToRoute(appointmentId: string, targetCrew: string, targetDate: string) {
     setApproved(false);
     setDispatchMessage("");
@@ -616,6 +621,23 @@ export default function Home() {
             </div>
           </section>
 
+          {dispatchMessage && (
+            <section
+              style={{
+                background: "#eef4ff",
+                border: "1px solid #cfddf5",
+                borderRadius: 14,
+                padding: "12px 15px",
+                marginBottom: 18,
+                color: "#31598d",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              {dispatchMessage}
+            </section>
+          )}
+
           <section
             style={{
               background: "white",
@@ -649,10 +671,22 @@ export default function Home() {
                 {proposal.routeBoard.map((day) => (
                   <div
                     key={day.crew + ":" + day.date}
+                    onDragOver={(event) => {
+                      if (draggedAppointmentId) event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedAppointmentId) {
+                        moveAppointmentToRoute(draggedAppointmentId, day.crew, day.date);
+                      }
+                    }}
                     style={{
-                      border: "1px solid #e1e8f0",
+                      border: draggedAppointmentId
+                        ? "1px dashed #7fa2df"
+                        : "1px solid #e1e8f0",
                       borderRadius: 16,
                       overflow: "hidden",
+                      background: draggedAppointmentId ? "#fbfdff" : "white",
                     }}
                   >
                     <div
@@ -936,14 +970,18 @@ export default function Home() {
               </div>
               <button
                 onClick={approve}
-                disabled={approved || counts.review > 0 || counts.move === 0}
+                disabled={approved || counts.review > 0 || counts.move === 0 || routeOverCapacity}
                 style={{
                   border: 0,
                   borderRadius: 12,
                   padding: "13px 20px",
                   fontWeight: 800,
                   cursor: approved || counts.review > 0 ? "default" : "pointer",
-                  background: approved ? "#9bbba8" : counts.review > 0 ? "#aeb8c5" : "#3167d8",
+                  background: approved
+                    ? "#9bbba8"
+                    : counts.review > 0 || routeOverCapacity
+                      ? "#aeb8c5"
+                      : "#3167d8",
                   color: "white",
                 }}
               >
@@ -951,7 +989,9 @@ export default function Home() {
                   ? "Approved ✓"
                   : counts.review > 0
                     ? "Resolve Reviews First"
-                    : counts.move > 0
+                    : routeOverCapacity
+                      ? "Adjust Route Capacity"
+                      : counts.move > 0
                       ? `Approve ${counts.move} Jobber change${counts.move === 1 ? "" : "s"}`
                       : "No Changes to Approve"}
               </button>
