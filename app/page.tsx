@@ -285,10 +285,21 @@ export default function Home() {
     [proposal]
   );
 
-  const routeOverCapacity = useMemo(
-    () => proposal?.routeBoard.some((day) => day.totalPlannedMinutes > 420) ?? false,
-    [proposal]
-  );
+  const routeOverCapacity = useMemo(() => {
+    if (!proposal) return false;
+
+    const movedIds = new Set(
+      proposal.appointments
+        .filter((item) => item.status === "MOVE")
+        .map((item) => item.id)
+    );
+
+    return proposal.routeBoard.some(
+      (day) =>
+        day.totalPlannedMinutes > 420 &&
+        day.stops.some((stop) => movedIds.has(stop.id))
+    );
+  }, [proposal]);
 
   const crewReassignmentsPending = useMemo(
     () =>
