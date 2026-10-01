@@ -33,6 +33,7 @@ const JOBS_QUERY = `query GetJobs($cursor: String) {
           startAt
           endAt
           duration
+          allDay
           visitStatus
           assignedUsers(first: 3) {
             nodes {
@@ -60,6 +61,33 @@ function stableId(prefix: string, value: string) {
   return prefix + "-" + createHash("sha256").update(value).digest("hex").slice(0, 32);
 }
 
+function visitDurationMinutes(visit: {
+  startAt?: string | null;
+  endAt?: string | null;
+  duration?: number | null;
+  allDay: boolean;
+}) {
+  if (visit.allDay) return 480;
+
+  if (visit.startAt && visit.endAt) {
+    const start = new Date(visit.startAt);
+    const end = new Date(visit.endAt);
+    const derived = Math.round((end.getTime() - start.getTime()) / 60000);
+
+    if (
+      Number.isFinite(derived) &&
+      derived > 0 &&
+      derived <= 24 * 60
+    ) {
+      return derived;
+    }
+  }
+
+  return typeof visit.duration === "number" && visit.duration > 0
+    ? Math.round(visit.duration)
+    : 60;
+}
+
 type JobberJob = {
   id: string;
   jobNumber: number;
@@ -81,6 +109,7 @@ type JobberJob = {
       startAt?: string | null;
       endAt?: string | null;
       duration?: number | null;
+      allDay: boolean;
       visitStatus: string;
       assignedUsers?: {
         nodes: Array<{ id: string; name?: { full?: string | null } | null }>;
@@ -227,7 +256,7 @@ export async function POST(request: Request) {
           crew_id: crewId,
           service: visit.title || job.title || `Job #${job.jobNumber}`,
           scheduled_date: scheduledDate.toISOString(),
-          duration_minutes: visit.duration ?? 60,
+          duration_minutes: visitDurationMinutes(visit),
           status: "SCHEDULED",
         });
       }
