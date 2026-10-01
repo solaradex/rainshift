@@ -285,20 +285,6 @@ export default function Home() {
     [proposal]
   );
 
-  const todayAppointments = useMemo(() => {
-    if (!proposal) return [];
-
-    const eventDate = proposal.weather.eventDate.slice(0, 10);
-    return [...proposal.appointments]
-      .filter((appointment) => appointment.scheduledDate?.slice(0, 10) === eventDate)
-      .sort(
-        (a, b) =>
-          new Date(a.scheduledDate ?? 0).getTime() -
-            new Date(b.scheduledDate ?? 0).getTime() ||
-          a.customer.localeCompare(b.customer)
-      );
-  }, [proposal]);
-
   const routeOverCapacity = useMemo(() => {
     if (!proposal) return false;
 
@@ -1059,7 +1045,7 @@ export default function Home() {
                 </thead>
 
                 <tbody>
-                  {todayAppointments.map((appointment) => (
+                  {proposal.appointments.map((appointment) => (
                     <tr key={appointment.id} style={{ borderTop: "1px solid #edf1f5" }}>
                       <td style={{ padding: 16 }}>
                         <div style={{ fontWeight: 700 }}>{appointment.customer}</div>
