@@ -5,6 +5,24 @@ import { buildRescheduleProposal } from "@/lib/scheduling/engine";
 import { createSupabaseSchedulingProvider } from "@/lib/scheduling/supabase-provider";
 import type { WeatherEvent } from "@/lib/scheduling/types";
 
+function dateKeyInTimezone(value: string | Date, timeZone: string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return year && month && day ? year + "-" + month + "-" + day : "";
+}
+
 export async function POST() {
   try {
     const { supabase, userId, companyId } = await getCurrentCompany();
@@ -15,25 +33,6 @@ export async function POST() {
         { status: 403 }
       );
     }
-
-    // A weather event can still require rescheduling after the first appointment
-    // of the day has already started or passed. Use the beginning of today rather
-    // than the exact current timestamp so today's remaining/live schedule is visible.
-    const todayStart = new Date();
-    todayStart.setUTCHours(0, 0, 0, 0);
-
-    const { data: jobberAppointment, error: jobberError } = await supabase
-      .from("appointments")
-      .select("scheduled_date")
-      .eq("company_id", companyId)
-      .eq("source_provider", "jobber")
-      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
-      .gte("scheduled_date", todayStart.toISOString())
-      .order("scheduled_date", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-
-    if (jobberError) throw jobberError;
 
     const { data: company, error: companyError } = await supabase
       .from("companies")
@@ -49,16 +48,50 @@ export async function POST() {
       );
     }
 
-    if (!jobberAppointment?.scheduled_date) {
+    const timeZone = company.timezone || "America/New_York";
+    const todayKey = dateKeyInTimezone(new Date(), timeZone);
+
+    // Look back far enough to include appointments that already started today.
+    // UTC midnight can already be tomorrow in the company local timezone late in the evening.
+    const scheduleLookupStart = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+    const scheduleLookupEnd = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data: jobberAppointments, error: jobberError } = await supabase
+      .from("appointments")
+      .select("scheduled_date")
+      .eq("company_id", companyId)
+      .eq("source_provider", "jobber")
+      .in("status", ["SCHEDULED", "KEEP", "MOVE", "REVIEW", "RESCHEDULED"])
+      .gte("scheduled_date", scheduleLookupStart)
+      .lt("scheduled_date", scheduleLookupEnd)
+      .order("scheduled_date", { ascending: true });
+
+    if (jobberError) throw jobberError;
+
+    const todayAppointment = (jobberAppointments ?? []).find(
+      (appointment) =>
+        appointment.scheduled_date &&
+        dateKeyInTimezone(appointment.scheduled_date, timeZone) === todayKey
+    );
+
+    const nextFutureAppointment = (jobberAppointments ?? []).find(
+      (appointment) =>
+        appointment.scheduled_date &&
+        dateKeyInTimezone(appointment.scheduled_date, timeZone) > todayKey
+    );
+
+    const eventDate = todayAppointment?.scheduled_date
+      ? dateKeyInTimezone(todayAppointment.scheduled_date, timeZone)
+      : nextFutureAppointment?.scheduled_date
+        ? dateKeyInTimezone(nextFutureAppointment.scheduled_date, timeZone)
+        : "";
+
+    if (!eventDate) {
       return NextResponse.json(
         { ok: false, error: "No real Jobber appointments are synced yet" },
         { status: 404 }
       );
     }
-
-    const eventDate = new Date(jobberAppointment.scheduled_date)
-      .toISOString()
-      .slice(0, 10);
 
     // Generate the forecast directly from the real Jobber date. This keeps the
     // proposal independent of stale/demo weather rows.
@@ -113,10 +146,14 @@ export async function POST() {
     const provider = createSupabaseSchedulingProvider(supabase, companyId);
     const scheduleWindow = await provider.getAppointments(start, end);
     const eventAppointments = scheduleWindow.filter(
-      (appointment) => appointment.scheduledDate?.slice(0, 10) === eventDate
+      (appointment) =>
+        appointment.scheduledDate &&
+        dateKeyInTimezone(appointment.scheduledDate, timeZone) === eventDate
     );
     const futureAppointments = scheduleWindow.filter(
-      (appointment) => appointment.scheduledDate?.slice(0, 10) !== eventDate
+      (appointment) =>
+        appointment.scheduledDate &&
+        dateKeyInTimezone(appointment.scheduledDate, timeZone) > eventDate
     );
 
     const weather: WeatherEvent = {
