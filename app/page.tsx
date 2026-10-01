@@ -285,6 +285,20 @@ export default function Home() {
     [proposal]
   );
 
+  const todayAppointments = useMemo(() => {
+    if (!proposal) return [];
+
+    const eventDate = proposal.weather.eventDate.slice(0, 10);
+    return [...proposal.appointments]
+      .filter((appointment) => appointment.scheduledDate?.slice(0, 10) === eventDate)
+      .sort(
+        (a, b) =>
+          new Date(a.scheduledDate ?? 0).getTime() -
+            new Date(b.scheduledDate ?? 0).getTime() ||
+          a.customer.localeCompare(b.customer)
+      );
+  }, [proposal]);
+
   const routeOverCapacity = useMemo(() => {
     if (!proposal) return false;
 
@@ -794,14 +808,31 @@ export default function Home() {
             }}
           >
             <div style={{ marginBottom: 18 }}>
-              <h2 style={{ margin: 0, fontSize: 20 }}>Proposed route board</h2>
+              <h2 style={{ margin: 0, fontSize: 20 }}>Move plan</h2>
               <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
-                Replacement routes are ordered by service start time. Drag a MOVED job to another
-                crew or day to rebuild the route totals instantly.
+                Only jobs RainShift recommends moving appear here. Drag a moved job to another
+                crew or day to adjust the plan.
               </p>
             </div>
 
-            {proposal.routeBoard.length === 0 ? (
+            {counts.move === 0 ? (
+              <div
+                style={{
+                  border: "1px solid #dce9e1",
+                  borderRadius: 14,
+                  padding: 20,
+                  background: "#f7fbf8",
+                }}
+              >
+                <div style={{ fontSize: 17, fontWeight: 800, color: "#24633f" }}>
+                  No jobs need moving
+                </div>
+                <div style={{ marginTop: 6, color: "#617265", fontSize: 14 }}>
+                  RainShift checked the full Jobber schedule for this weather date.
+                  Review today&apos;s appointments below.
+                </div>
+              </div>
+            ) : proposal.routeBoard.length === 0 ? (
               <div
                 style={{
                   border: "1px dashed #cfd8e3",
@@ -1001,10 +1032,12 @@ export default function Home() {
             }}
           >
             <div style={{ padding: 22, borderBottom: "1px solid #e7edf4" }}>
-              <h2 style={{ margin: 0, fontSize: 20 }}>Proposed schedule</h2>
+              <h2 style={{ margin: 0, fontSize: 20 }}>
+                Today&apos;s Jobber schedule
+              </h2>
               <p style={{ margin: "7px 0 0", color: "#6a7787", fontSize: 14 }}>
-                The deterministic scheduling engine made the first pass. Operators can review
-                exceptions before approval.
+                All {todayAppointments.length} synced appointments for this weather date are shown
+                below. RainShift&apos;s recommendation is in the Decision column.
               </p>
             </div>
 
@@ -1026,7 +1059,7 @@ export default function Home() {
                 </thead>
 
                 <tbody>
-                  {proposal.appointments.map((appointment) => (
+                  {todayAppointments.map((appointment) => (
                     <tr key={appointment.id} style={{ borderTop: "1px solid #edf1f5" }}>
                       <td style={{ padding: 16 }}>
                         <div style={{ fontWeight: 700 }}>{appointment.customer}</div>
@@ -1034,7 +1067,21 @@ export default function Home() {
                           {appointment.address}
                         </div>
                       </td>
-                      <td style={{ padding: 16 }}>{appointment.crew}</td>
+                      <td style={{ padding: 16 }}>
+                        <div>{appointment.crew}</div>
+                        {appointment.crew === "Jobber Unassigned" && (
+                          <div
+                            style={{
+                              marginTop: 5,
+                              color: "#8a5a00",
+                              fontSize: 11,
+                              fontWeight: 800,
+                            }}
+                          >
+                            Assignment needed
+                          </div>
+                        )}
+                      </td>
                       <td style={{ padding: 16 }}>
                         <div>{appointment.service}</div>
                         <div style={{ fontSize: 12, color: "#788595" }}>
